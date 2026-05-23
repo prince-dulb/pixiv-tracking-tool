@@ -11,7 +11,7 @@ import gallery_dl.config as gdl_config
 import gallery_dl.job as gdl_job
 
 from .client import PixivClient
-from .config import IMAGES_DIR, DATA_DIR
+from . import config as _cfg
 from .models import Session, TrackedArtist, Illustration
 
 
@@ -170,7 +170,7 @@ class Tracker:
 
         # 如果文件被删了需要重新下载，先清除 archive 让 gallery-dl 不跳过
         if clear_archive:
-            archive = DATA_DIR / "gallery_dl_archive.db"
+            archive = _cfg.DATA_DIR / "gallery_dl_archive.db"
             if archive.exists():
                 archive.unlink()
 
@@ -186,7 +186,7 @@ class Tracker:
         import zipfile
         from PIL import Image
         dir_name = _artist_dir_name(artist)
-        artist_dir = IMAGES_DIR / dir_name
+        artist_dir = _cfg.IMAGES_DIR / dir_name
         if not artist_dir.exists():
             return
 
@@ -254,7 +254,7 @@ class Tracker:
     def _update_file_paths(self, session, artist):
         """扫描下载目录，检查并更新所有作品的本地文件路径。缺失的标记为待下载。"""
         dir_name = _artist_dir_name(artist)
-        artist_dir = IMAGES_DIR / dir_name
+        artist_dir = _cfg.IMAGES_DIR / dir_name
         web_prefix = f"/images/{dir_name}"
 
         all_illusts = (

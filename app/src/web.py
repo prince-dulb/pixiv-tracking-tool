@@ -31,11 +31,13 @@ async def _init_auth():
     global tracker
     try:
         await asyncio.to_thread(auth)
-        tracker = Tracker()
-        start_scheduler(tracker)
+        t = Tracker()
+        start_scheduler(t)
+        tracker = t
         templates.env.globals["pixiv_logged_in"] = True
         print("[OK] Pixiv 登录成功，追踪功能已就绪")
     except Exception as e:
+        tracker = None
         print(f"[warn] Pixiv 未登录: {e}")
         print("[warn] Web 界面可用，但追踪/下载功能需登录后使用")
 
