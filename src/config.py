@@ -1,8 +1,14 @@
 import os
+import sys
 from pathlib import Path
 from dotenv import load_dotenv
 
-PROJECT_ROOT = Path(__file__).parent.parent
+# PyInstaller 打包后 __file__ 不可用，用 sys._MEIPASS 或可执行文件目录
+if getattr(sys, 'frozen', False):
+    PROJECT_ROOT = Path(sys.executable).parent
+else:
+    PROJECT_ROOT = Path(__file__).parent.parent
+
 load_dotenv(PROJECT_ROOT / ".env")
 
 # Pixiv auth
