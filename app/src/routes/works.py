@@ -145,7 +145,8 @@ async def illust_detail(request: Request, illust_id: int,
 
     # 为详情页筛选栏准备数据
     all_artists = session.query(TrackedArtist).filter_by(is_active=True).order_by(TrackedArtist.name).all()
-    selected_ids = set()
+    all_artist_ids = {a.id for a in all_artists}
+    selected_ids = None  # None = 全选（默认）
     if artist_id:
         selected_ids = {artist_id}
     elif artist_ids:
@@ -154,37 +155,59 @@ async def illust_detail(request: Request, illust_id: int,
         except (ValueError, TypeError):
             pass
 
-    # 详情页筛选 URL 都指向当前插图，只改变查询参数
-    def _detail_url(extra_params):
+    # 构建详情页筛选 URL（都指向当前插图，不跳走）
+    def _make_url(artist_param=None, type_param=None):
         parts = []
-        if extra_params:
-            parts.append(extra_params)
-        if type and "type=" not in (extra_params or ""):
-            parts.append(f"type={type}")
-        qs = "&".join(parts)
-        return f"/illust/{illust_id}?{qs}" if qs else f"/illust/{illust_id}"
+        if artist_param:
+            parts.append(artist_param)
+        if type_param:
+            parts.append(f"type={type_param}")
+        else:
+            # 保留当前 type，除非显式传 None
+            pass
+        if not parts:
+            return f"/illust/{illust_id}"
+        return f"/illust/{illust_id}?{'&'.join(parts)}"
 
+    def _artist_param(id_set):
+        if id_set is None:
+            return None  # 全选（不传参数）
+        if artist_id:
+            return f"artist_ids={_ids_str(id_set)}"
+        return f"artist_ids={_ids_str(id_set)}" if id_set else "artist_ids="
+
+    # 画师 toggle URL
     detail_toggle_urls = {}
-    for a in all_artists:
-        new_set = selected_ids.copy()
-        if a.id in new_set:
-            new_set.discard(a.id)
-        else:
-            new_set.add(a.id)
-        if new_set:
-            detail_toggle_urls[a.id] = _detail_url(f"artist_ids={_ids_str(new_set)}")
-        else:
-            detail_toggle_urls[a.id] = _detail_url(None)
+    if selected_ids is None:
+        for a in all_artists:
+            others = all_artist_ids - {a.id}
+            detail_toggle_urls[a.id] = _make_url(_artist_param(others), type)
+    else:
+        for a in all_artists:
+            new_set = selected_ids.copy()
+            if a.id in new_set:
+                new_set.discard(a.id)
+            else:
+                new_set.add(a.id)
+            detail_toggle_urls[a.id] = _make_url(_artist_param(new_set), type)
 
+    # 反选 URL
+    if selected_ids is None:
+        invert_url = _make_url(None, type)
+    else:
+        inverted = all_artist_ids - selected_ids
+        invert_url = _make_url(_artist_param(inverted), type)
+
+    # "全部" URL（清除画师筛选，保留类型）
+    all_url = _make_url(None, type)
+
+    # 类型 URL（保留画师筛选）
     detail_type_urls = {}
     for t in TYPE_LABELS:
         if t == type:
-            detail_type_urls[t] = _detail_url(None)
+            detail_type_urls[t] = _make_url(_artist_param(selected_ids), None)
         else:
-            param = f"type={t}"
-            if selected_ids:
-                param = f"artist_ids={_ids_str(selected_ids)}&{param}"
-            detail_type_urls[t] = _detail_url(param)
+            detail_type_urls[t] = _make_url(_artist_param(selected_ids), t)
 
     session.close()
 
@@ -195,8 +218,10 @@ async def illust_detail(request: Request, illust_id: int,
          "prev_id": prev_id, "next_id": next_id, "nav_query": nav_query,
          "current_idx": current_idx + 1, "total_count": len(all_ids),
          "back_url": back_url,
-         "all_artists": all_artists, "selected_artist_ids": selected_ids,
+         "all_artists": all_artists, "all_artist_ids": all_artist_ids,
+         "selected_artist_ids": selected_ids,
          "detail_toggle_urls": detail_toggle_urls, "detail_type_urls": detail_type_urls,
+         "invert_url": invert_url, "all_url": all_url,
          "current_type": type},
     )
 

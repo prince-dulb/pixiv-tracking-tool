@@ -11,19 +11,20 @@
     </div>
 </div>
 
-<div id="filter-panel" class="detail-filters" style="display:none;">
+<div id="filter-panel" class="detail-filters" style="display:{% if selected_artist_ids is not none and selected_artist_ids != all_artist_ids %}block{% else %}none{% endif %};">
     <div class="filter-bar">
         <span>画师：</span>
-        <a href="/illust/{{ illust.id }}{% if current_type %}?type={{ current_type }}{% endif %}"
-           class="filter-tag {% if not selected_artist_ids %}active{% endif %}">全部</a>
+        <a href="{{ all_url }}"
+           class="filter-tag {% if selected_artist_ids is none %}active{% endif %}">全部</a>
         {% for a in all_artists %}
         <a href="{{ detail_toggle_urls[a.id] }}"
-           class="filter-tag {% if a.id in selected_artist_ids %}active{% endif %}">{{ a.name }}</a>
+           class="filter-tag {% if selected_artist_ids is none or a.id in selected_artist_ids %}active{% endif %}">{{ a.name }}</a>
         {% endfor %}
+        <a href="{{ invert_url }}" class="filter-tag" style="background:#333;border-color:#555;">反选</a>
     </div>
     <div class="filter-bar" style="margin-top:6px;">
         <span>类型：</span>
-        <a href="/illust/{{ illust.id }}{% if selected_artist_ids %}?artist_ids={{ selected_artist_ids|join(',') }}{% endif %}"
+        <a href="{{ all_url }}"
            class="filter-tag {% if not current_type %}active{% endif %}">全部</a>
         {% for t, label in type_labels.items() %}
         <a href="{{ detail_type_urls[t] }}" class="filter-tag {% if current_type == t %}active{% endif %}">{{ label }}</a>
@@ -32,16 +33,20 @@
 </div>
 
 <script>
-document.getElementById('toggle-filters').addEventListener('click', function() {
+(function() {
+    var btn = document.getElementById('toggle-filters');
     var panel = document.getElementById('filter-panel');
-    if (panel.style.display === 'none') {
-        panel.style.display = 'block';
-        this.textContent = '收起';
-    } else {
-        panel.style.display = 'none';
-        this.textContent = '筛选';
-    }
-});
+    btn.textContent = panel.style.display === 'none' ? '筛选' : '收起';
+    btn.addEventListener('click', function() {
+        if (panel.style.display === 'none') {
+            panel.style.display = 'block';
+            this.textContent = '收起';
+        } else {
+            panel.style.display = 'none';
+            this.textContent = '筛选';
+        }
+    });
+})();
 </script>
 
 <div class="detail-header">
