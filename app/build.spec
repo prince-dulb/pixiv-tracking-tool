@@ -1,4 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
+from PyInstaller.utils.hooks import collect_submodules
 
 a = Analysis(
     ['run.py'],
@@ -9,10 +10,8 @@ a = Analysis(
         ('static', 'static'),
         ('.env.example', '.'),
     ],
-    hiddenimports=[
+    hiddenimports=collect_submodules('gallery_dl') + [
         'jinja2.ext',
-        'gallery_dl.extractor.pixiv',
-        'gallery_dl.postprocessor.ugoira',
         'PIL',
         'PIL.Image',
     ],
