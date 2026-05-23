@@ -8,16 +8,18 @@ from dotenv import load_dotenv
 if getattr(sys, 'frozen', False):
     BUNDLE_DIR = Path(sys._MEIPASS)
     PROJECT_ROOT = Path(sys.executable).parent
+    APP_DIR = BUNDLE_DIR  # 打包后所有资源在 _MEIPASS
 else:
     BUNDLE_DIR = None
-    PROJECT_ROOT = Path(__file__).parent.parent
+    PROJECT_ROOT = Path(__file__).parent.parent.parent  # 仓库根目录
+    APP_DIR = Path(__file__).parent.parent  # app/ 目录
 
 
 def resource_path(relative_path):
     """获取资源文件路径，兼容 PyInstaller 打包。"""
     if BUNDLE_DIR:
         return str(BUNDLE_DIR / relative_path)
-    return str(PROJECT_ROOT / relative_path)
+    return str(APP_DIR / relative_path)
 
 
 env_file = PROJECT_ROOT / ".env"

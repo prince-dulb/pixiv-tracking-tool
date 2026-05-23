@@ -1,13 +1,13 @@
 # -*- mode: python ; coding: utf-8 -*-
 
 a = Analysis(
-    ['run.py'],
+    ['app/run.py'],
     pathex=[],
     binaries=[],
     datas=[
-        ('src/templates', 'src/templates'),
-        ('static', 'static'),
-        ('.env.example', '.'),
+        ('app/src/templates', 'src/templates'),
+        ('app/static', 'static'),
+        ('app/.env.example', '.'),
     ],
     hiddenimports=[
         'jinja2.ext',

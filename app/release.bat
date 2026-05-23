@@ -4,7 +4,7 @@ cd /d "%~dp0"
 REM 从 build.spec 读取版本号
 for /f "tokens=2 delims='" %%a in ('findstr "name=" build.spec') do set "EXE_NAME=%%a"
 set "VERSION=%EXE_NAME:PixivTracker_v=%"
-set "RELEASE_DIR=release\%VERSION%"
+set "RELEASE_DIR=..\release\%VERSION%"
 
 echo ================================
 echo   Pixiv Tracker Release Builder
