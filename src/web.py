@@ -5,6 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from .config import HOST, PORT, PROJECT_ROOT, resource_path
+from . import config as _cfg
 from .models import init_db
 from .auth import auth
 from .client import PixivClient
@@ -62,8 +63,7 @@ app.mount("/static", StaticFiles(directory=resource_path("static")), name="stati
 # 动态服务图片文件（支持自定义路径）
 @app.get("/images/{path:path}")
 async def serve_image(path: str):
-    from .config import IMAGES_DIR
-    file_path = IMAGES_DIR / path
+    file_path = _cfg.IMAGES_DIR / path
     if file_path.exists() and file_path.is_file():
         return FileResponse(str(file_path))
     from starlette.responses import Response
