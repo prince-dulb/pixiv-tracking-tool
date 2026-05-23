@@ -80,15 +80,15 @@ async def api_status():
 async def api_restart():
     import os
     import sys
+    import subprocess
     import time
     import threading
     from fastapi.responses import JSONResponse
 
     def _restart():
         time.sleep(0.5)
-        python = sys.executable
-        args = [python] + sys.argv
-        os.execv(python, args)
+        subprocess.Popen([sys.executable])
+        os._exit(0)
 
     threading.Thread(target=_restart, daemon=True).start()
     return JSONResponse({"ok": True})
