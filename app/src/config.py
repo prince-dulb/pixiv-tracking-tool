@@ -22,7 +22,7 @@ def resource_path(relative_path):
     return str(APP_DIR / relative_path)
 
 
-env_file = PROJECT_ROOT / ".env"
+env_file = (PROJECT_ROOT if getattr(sys, 'frozen', False) else APP_DIR) / ".env"
 if not env_file.exists():
     env_file.write_text("""\
 # Pixiv Tracking Tool configuration
