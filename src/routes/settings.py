@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Request, Form
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, JSONResponse
 
 from ..web import get_tracker, templates
 from ..models import Session, TrackedArtist, Illustration
-from ..config import set_data_root
+from ..config import set_data_root, DATA_ROOT as _CFG_DATA_ROOT
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 
@@ -63,3 +63,28 @@ async def change_path(request: Request, new_path: str = Form(...)):
         )
 
     return RedirectResponse("/settings", status_code=303)
+
+
+@router.post("/browse-path")
+async def browse_path():
+    """弹出原生文件夹选择对话框，返回所选路径。"""
+    import asyncio
+    import tkinter as tk
+    from tkinter import filedialog
+
+    result = {"path": None}
+
+    def _open_dialog():
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes("-topmost", True)
+        path = filedialog.askdirectory(
+            parent=root,
+            initialdir=str(_CFG_DATA_ROOT),
+            title="选择数据存储目录",
+        )
+        root.destroy()
+        result["path"] = path
+
+    await asyncio.to_thread(_open_dialog)
+    return JSONResponse(result)
