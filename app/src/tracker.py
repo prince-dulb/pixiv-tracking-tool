@@ -12,6 +12,7 @@ import gallery_dl.job as gdl_job
 
 from .client import PixivClient
 from . import config as _cfg
+from . import progress
 from .models import Session, TrackedArtist, Illustration
 
 
@@ -77,8 +78,21 @@ class Tracker:
         artists = session.query(TrackedArtist).filter_by(is_active=True).all()
         results = {}
 
-        for artist in artists:
-            new_count = self._fetch_new_illusts(session, artist)
+        progress.reset()
+        progress.set_progress(0, len(artists))
+        progress.set_detail("正在检查画师更新...")
+
+        for i, artist in enumerate(artists):
+            progress.set_artist(artist.name)
+            progress.set_progress(i + 1, len(artists))
+
+            try:
+                new_count = self._fetch_new_illusts(session, artist)
+                progress.add_found(new_count)
+            except Exception as e:
+                progress.add_error(f"{artist.name}: {e}")
+                new_count = 0
+
             self._update_file_paths(session, artist)
             self._convert_ugoira_zips(session, artist)
             session.commit()
@@ -88,7 +102,13 @@ class Tracker:
                 .filter(Illustration.file_paths == None).count()
             )
             if new_count > 0 or missing > 0:
-                self._download_artist(artist.pixiv_user_id, clear_archive=(missing > 0))
+                progress.set_detail(f"正在下载 {artist.name} 的作品...")
+                try:
+                    self._download_artist(artist.pixiv_user_id, clear_archive=(missing > 0))
+                    progress.add_downloaded(new_count or missing)
+                except Exception as e:
+                    progress.add_error(f"下载 {artist.name}: {e}")
+
                 self._update_file_paths(session, artist)
                 self._convert_ugoira_zips(session, artist)
             results[artist.name] = new_count
@@ -96,13 +116,19 @@ class Tracker:
 
         session.commit()
         session.close()
+        progress.finish()
         return results
 
     def download_pending(self):
         """下载所有未下载的文件缺失的作品。"""
         session = Session()
         artists = session.query(TrackedArtist).filter_by(is_active=True).all()
-        for artist in artists:
+
+        progress.reset()
+        progress.begin_phase("downloading")
+        progress.set_progress(0, len(artists))
+
+        for i, artist in enumerate(artists):
             self._update_file_paths(session, artist)
             self._convert_ugoira_zips(session, artist)
             session.commit()
@@ -112,11 +138,20 @@ class Tracker:
                 .filter(Illustration.file_paths == None).count()
             )
             if missing > 0:
-                self._download_artist(artist.pixiv_user_id, clear_archive=True)
+                progress.set_artist(artist.name)
+                progress.set_progress(i + 1, len(artists))
+                progress.set_detail(f"正在下载 {artist.name} 的作品...")
+                try:
+                    self._download_artist(artist.pixiv_user_id, clear_archive=True)
+                    progress.add_downloaded(missing)
+                except Exception as e:
+                    progress.add_error(f"下载 {artist.name}: {e}")
+
                 self._update_file_paths(session, artist)
                 self._convert_ugoira_zips(session, artist)
         session.commit()
         session.close()
+        progress.finish()
 
     def _fetch_all_illusts(self, session, artist):
         count = 0

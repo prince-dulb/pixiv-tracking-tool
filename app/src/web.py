@@ -76,6 +76,13 @@ async def api_status():
     })
 
 
+@app.get("/api/progress")
+async def api_progress():
+    from . import progress
+    from fastapi.responses import JSONResponse
+    return JSONResponse(progress.get_state())
+
+
 @app.post("/api/reload")
 async def api_reload():
     """原地重载：重启数据库引擎和 tracker，用于数据目录迁移后。"""

@@ -1,5 +1,5 @@
 import threading
-from fastapi import APIRouter, Request, Query
+from fastapi import APIRouter, Request, Query, Form
 from fastapi.responses import RedirectResponse
 
 from ..models import Session, TrackedArtist, Illustration
@@ -10,36 +10,78 @@ router = APIRouter(tags=["works"])
 TYPE_LABELS = {"illust": "插画", "manga": "漫画", "ugoira": "动图"}
 
 
+def _ids_str(ids_set):
+    return ",".join(str(x) for x in sorted(ids_set))
+
+
+def _toggle_url(artist_id, selected_ids, current_type):
+    new_set = selected_ids.copy()
+    if artist_id in new_set:
+        new_set.discard(artist_id)
+    else:
+        new_set.add(artist_id)
+    params = []
+    if new_set:
+        params.append(f"artist_ids={_ids_str(new_set)}")
+    if current_type:
+        params.append(f"type={current_type}")
+    return "/?" + "&".join(params) if params else "/"
+
+
 @router.get("/")
-async def index(request: Request, artist_id: int = Query(None), type: str = Query(None)):
+async def index(request: Request, artist_ids: str = Query(None), type: str = Query(None)):
     session = Session()
+
+    selected_ids = set()
+    if artist_ids:
+        try:
+            selected_ids = {int(x.strip()) for x in artist_ids.split(",") if x.strip()}
+        except (ValueError, TypeError):
+            pass
+
     query = session.query(Illustration).order_by(Illustration.posted_at.desc())
 
-    if artist_id:
-        query = query.filter_by(artist_id=artist_id)
-        artist = session.query(TrackedArtist).get(artist_id)
-    else:
-        artist = None
+    if selected_ids:
+        query = query.filter(Illustration.artist_id.in_(selected_ids))
 
     if type and type in TYPE_LABELS:
         query = query.filter_by(type=type)
 
     illustrations = query.limit(200).all()
 
-    artist_ids = {i.artist_id for i in illustrations}
+    illust_artist_ids = {i.artist_id for i in illustrations}
     artists_map = {}
-    if artist_ids:
-        artists_list = session.query(TrackedArtist).filter(TrackedArtist.id.in_(artist_ids)).all()
+    if illust_artist_ids:
+        artists_list = session.query(TrackedArtist).filter(TrackedArtist.id.in_(illust_artist_ids)).all()
         artists_map = {a.id: a for a in artists_list}
 
     all_artists = session.query(TrackedArtist).filter_by(is_active=True).order_by(TrackedArtist.name).all()
     session.close()
 
+    toggle_urls = {}
+    for a in all_artists:
+        toggle_urls[a.id] = _toggle_url(a.id, selected_ids, type)
+
+    type_urls = {}
+    for t in TYPE_LABELS:
+        params = []
+        if selected_ids:
+            params.append(f"artist_ids={_ids_str(selected_ids)}")
+        if t != type or not type:
+            params.append(f"type={t}")
+        else:
+            params = [f"artist_ids={_ids_str(selected_ids)}"] if selected_ids else []
+        type_urls[t] = "/?" + "&".join(params) if params else "/"
+
+    total_selected = len(selected_ids) if selected_ids else None
+
     return templates.TemplateResponse(
         request, "index.html",
         {"illustrations": illustrations, "artists": all_artists,
-         "artists_map": artists_map, "current_artist": artist,
-         "current_type": type, "type_labels": TYPE_LABELS},
+         "artists_map": artists_map, "selected_artist_ids": selected_ids,
+         "toggle_urls": toggle_urls, "type_urls": type_urls,
+         "current_type": type, "type_labels": TYPE_LABELS,
+         "total_selected": total_selected},
     )
 
 
@@ -53,7 +95,6 @@ async def illust_detail(request: Request, illust_id: int):
 
     artist = session.query(TrackedArtist).get(illust.artist_id)
 
-    # 解析文件路径和标签
     import json
     paths = illust.file_paths.split(",") if illust.file_paths else []
     page_count = len(paths) or illust.page_count
@@ -98,11 +139,17 @@ async def artist_works(request: Request, artist_id: int, type: str = Query(None)
 
 
 @router.post("/refresh")
-async def refresh_all():
+async def refresh_all(artist_ids: str = Form(None), type: str = Form(None)):
     tracker = get_tracker()
     if tracker:
         threading.Thread(target=_do_refresh_all, args=(tracker,), daemon=True).start()
-    return RedirectResponse("/", status_code=303)
+    params = []
+    if artist_ids:
+        params.append(f"artist_ids={artist_ids}")
+    if type:
+        params.append(f"type={type}")
+    url = "/?" + "&".join(params) if params else "/"
+    return RedirectResponse(url, status_code=303)
 
 
 def _do_refresh_all(tracker):

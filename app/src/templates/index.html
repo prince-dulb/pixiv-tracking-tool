@@ -5,20 +5,29 @@
     <div class="toolbar-row">
         <div class="filter-bar">
             <span>画师：</span>
-            <a href="/{% if current_type %}?type={{ current_type }}{% endif %}" class="filter-tag {% if not current_artist %}active{% endif %}">全部</a>
+            <a href="/{% if current_type %}?type={{ current_type }}{% endif %}"
+               class="filter-tag {% if not selected_artist_ids %}active{% endif %}">全部</a>
             {% for a in artists %}
-            <a href="/?artist_id={{ a.id }}{% if current_type %}&type={{ current_type }}{% endif %}" class="filter-tag {% if current_artist and current_artist.id == a.id %}active{% endif %}">{{ a.name }}</a>
+            <a href="{{ toggle_urls[a.id] }}"
+               class="filter-tag {% if a.id in selected_artist_ids %}active{% endif %}">{{ a.name }}</a>
             {% endfor %}
         </div>
         <form method="post" action="/refresh" style="margin-left: auto;">
+            {% if selected_artist_ids %}
+            <input type="hidden" name="artist_ids" value="{{ selected_artist_ids|join(',') }}">
+            {% endif %}
+            {% if current_type %}
+            <input type="hidden" name="type" value="{{ current_type }}">
+            {% endif %}
             <button type="submit" class="btn-sm">刷新检查</button>
         </form>
     </div>
     <div class="filter-bar" style="margin-top: 6px;">
         <span>类型：</span>
-        <a href="/{% if current_artist %}?artist_id={{ current_artist.id }}{% endif %}" class="filter-tag {% if not current_type %}active{% endif %}">全部</a>
+        <a href="/{% if selected_artist_ids %}?artist_ids={{ selected_artist_ids|join(',') }}{% endif %}"
+           class="filter-tag {% if not current_type %}active{% endif %}">全部</a>
         {% for t, label in type_labels.items() %}
-        <a href="/?type={{ t }}{% if current_artist %}&artist_id={{ current_artist.id }}{% endif %}" class="filter-tag {% if current_type == t %}active{% endif %}">{{ label }}</a>
+        <a href="{{ type_urls[t] }}" class="filter-tag {% if current_type == t %}active{% endif %}">{{ label }}</a>
         {% endfor %}
     </div>
 </div>

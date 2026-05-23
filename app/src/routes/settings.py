@@ -33,19 +33,35 @@ async def settings_page(request: Request):
 
 @router.post("/check-now")
 async def check_now():
+    import threading
     tracker = get_tracker()
     if tracker:
+        threading.Thread(target=_run_check_all, args=(tracker,), daemon=True).start()
+    return RedirectResponse("/settings", status_code=303)
+
+
+def _run_check_all(tracker):
+    try:
         tracker.check_updates()
         tracker.download_pending()
-    return RedirectResponse("/settings", status_code=303)
+    except Exception:
+        pass
 
 
 @router.post("/download-pending")
 async def download_pending():
+    import threading
     tracker = get_tracker()
     if tracker:
-        tracker.download_pending()
+        threading.Thread(target=_run_download_all, args=(tracker,), daemon=True).start()
     return RedirectResponse("/settings", status_code=303)
+
+
+def _run_download_all(tracker):
+    try:
+        tracker.download_pending()
+    except Exception:
+        pass
 
 
 @router.post("/change-path")

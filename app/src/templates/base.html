@@ -22,6 +22,16 @@
         {% if error %}
         <div class="alert alert-error">{{ error }}</div>
         {% endif %}
+        <div id="progress-box" class="progress-box" style="display:none;">
+            <div class="progress-header">
+                <span id="progress-message"></span>
+            </div>
+            <div class="progress-bar-track">
+                <div id="progress-bar" class="progress-bar-fill" style="width:0%"></div>
+            </div>
+            <div id="progress-detail"></div>
+            <div id="progress-errors"></div>
+        </div>
         {% block content %}{% endblock %}
     </main>
     {% if not pixiv_logged_in %}
@@ -72,5 +82,48 @@
     });
     </script>
     {% endif %}
+    <script>
+    (function pollProgress() {
+        fetch('/api/progress')
+            .then(r => r.json())
+            .then(data => {
+                var box = document.getElementById('progress-box');
+                if (data.active) {
+                    box.style.display = 'block';
+                    var pct = data.total_artists > 0
+                        ? Math.round(data.artist_index / data.total_artists * 100) : 0;
+                    document.getElementById('progress-bar').style.width = pct + '%';
+                    var parts = [];
+                    if (data.current_artist) parts.push(data.current_artist);
+                    if (data.current_detail) parts.push(data.current_detail);
+                    document.getElementById('progress-message').textContent = parts.join(' - ');
+                    var detailParts = [];
+                    if (data.total_artists) detailParts.push(data.artist_index + '/' + data.total_artists);
+                    if (data.works_found) detailParts.push(data.works_found + ' 件新作');
+                    if (data.works_downloaded) detailParts.push('下载 ' + data.works_downloaded + ' 件');
+                    document.getElementById('progress-detail').textContent = detailParts.join(' · ');
+                    var errDiv = document.getElementById('progress-errors');
+                    if (data.errors && data.errors.length > 0) {
+                        errDiv.innerHTML = data.errors.slice(-5).map(function(e) {
+                            return '<div class="progress-error">' + e + '</div>';
+                        }).join('');
+                        errDiv.style.display = 'block';
+                    } else {
+                        errDiv.style.display = 'none';
+                    }
+                    progressTimer = setTimeout(pollProgress, 1000);
+                } else {
+                    if (box.style.display !== 'none') {
+                        location.reload();
+                    }
+                    box.style.display = 'none';
+                    progressTimer = setTimeout(pollProgress, 2000);
+                }
+            })
+            .catch(function() {
+                progressTimer = setTimeout(pollProgress, 5000);
+            });
+    })();
+    </script>
 </body>
 </html>
