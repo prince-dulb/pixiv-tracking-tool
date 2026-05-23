@@ -39,10 +39,11 @@
     <h3>数据存储目录</h3>
     <p>所有数据（数据库、token、作品图片）存放在此目录下。当前路径：<code>{{ data_root }}</code></p>
     <p style="color:#888;font-size:13px;">目录内部结构：<code>data/</code>（数据库） + <code>images/</code>（作品图片）</p>
-    <form method="post" action="/settings/change-path" class="add-form">
+    <p style="color:var(--accent);font-size:13px;">注意：修改路径后需重启程序才能完全生效。</p>
+    <form method="post" action="/settings/change-path" class="add-form" id="change-path-form">
         <input type="text" name="new_path" id="new_path" placeholder="输入新路径，如 D:/pixiv_data" value="{{ data_root }}">
         <button type="button" id="browse-btn">浏览...</button>
-        <button type="submit">修改路径</button>
+        <button type="submit" id="apply-btn">修改路径</button>
     </form>
 </div>
 
@@ -56,10 +57,10 @@ document.getElementById('browse-btn').addEventListener('click', async () => {
         const data = await resp.json();
         if (data.path) {
             document.getElementById('new_path').value = data.path;
+            document.getElementById('change-path-form').submit();
         }
     } catch (e) {
         console.error(e);
-    } finally {
         btn.textContent = '浏览...';
         btn.disabled = false;
     }
