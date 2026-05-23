@@ -89,10 +89,28 @@ def _oauth_pkce():
     print("\n" + "=" * 55)
     print("  Pixiv 需要浏览器授权登录")
     print("=" * 55)
-    print("\n  浏览器即将打开，请在浏览器中登录你的 Pixiv 账号。")
-    print("  登录成功后会自动捕获授权码，无需手动操作。\n")
 
+    # 尝试 Playwright 自动捕获
+    print("\n  尝试自动打开浏览器...")
     code = _browser_oauth(login_url)
+
+    # Playwright 不可用时回退到手动方式
+    if not code:
+        print("\n  自动捕获失败，改为手动方式：")
+        print(f"\n  1. 在浏览器中打开：\n     {login_url}\n")
+        print("  2. 按 F12 → Network 标签页 → 过滤框输入 callback")
+        print("  3. 登录你的 Pixiv 账号")
+        print("  4. 在 Network 中找到 'callback?state=...' 请求，")
+        print("     复制它的 'code' 参数值\n")
+
+        try:
+            webbrowser.open(login_url)
+        except Exception:
+            pass
+
+        user_input = input("  >> 粘贴 code: ").strip()
+        code = _extract_code(user_input)
+
     if not code:
         return None
 
