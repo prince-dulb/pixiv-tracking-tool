@@ -11,9 +11,11 @@ from requests.structures import CaseInsensitiveDict
 
 import gallery_dl.config as gdl_config
 
-from .config import PIXIV_REFRESH_TOKEN, DATA_DIR
+from . import config as _cfg
 
-TOKEN_FILE = DATA_DIR / "pixiv_token.json"
+
+def _token_file():
+    return _cfg.DATA_DIR / "pixiv_token.json"
 
 # Web-based OAuth state
 _pending_login_url = None
@@ -68,21 +70,21 @@ TOKEN_URL = "https://oauth.secure.pixiv.net/auth/token"
 
 
 def _save_token(access_token, refresh_token):
-    TOKEN_FILE.write_text(json.dumps({
+    _token_file().write_text(json.dumps({
         "access_token": access_token,
         "refresh_token": refresh_token,
     }))
 
 
 def _load_token():
-    if TOKEN_FILE.exists():
-        return json.loads(TOKEN_FILE.read_text())
+    if _token_file().exists():
+        return json.loads(_token_file().read_text())
     return {}
 
 
 def _try_refresh_token():
     saved = _load_token()
-    refresh_token = saved.get("refresh_token") or PIXIV_REFRESH_TOKEN
+    refresh_token = saved.get("refresh_token") or _cfg.PIXIV_REFRESH_TOKEN
 
     if not refresh_token:
         return None
@@ -342,7 +344,7 @@ def configure_gallery_dl(refresh_token):
             'pixiv': {
                 'refresh-token': refresh_token,
                 'directory': ['{user[name]} {user[id]}'],
-                'archive': str(DATA_DIR / 'gallery_dl_archive.db'),
+                'archive': str(_cfg.DATA_DIR / 'gallery_dl_archive.db'),
             }
         })
     else:
@@ -351,7 +353,7 @@ def configure_gallery_dl(refresh_token):
             'pixiv': {
                 'refresh-token': refresh_token,
                 'directory': [str(images_dir.relative_to(project_root)), '{user[name]} {user[id]}'],
-                'archive': str(DATA_DIR / 'gallery_dl_archive.db'),
+                'archive': str(_cfg.DATA_DIR / 'gallery_dl_archive.db'),
             }
         })
 

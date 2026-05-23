@@ -2,20 +2,22 @@ import json
 import requests
 from pathlib import Path
 
-from .config import DATA_DIR
+from . import config as _cfg
 from .auth import CLIENT_ID, CLIENT_SECRET, HASH_SECRET
 
-TOKEN_FILE = DATA_DIR / "pixiv_token.json"
+
+def _token_file():
+    return _cfg.DATA_DIR / "pixiv_token.json"
 
 API_HOST = "https://app-api.pixiv.net"
 
 
 def _get_auth_header():
     """获取当前有效的 access_token 用于 API 请求。"""
-    if not TOKEN_FILE.exists():
+    if not _token_file().exists():
         return {}
 
-    saved = json.loads(TOKEN_FILE.read_text())
+    saved = json.loads(_token_file().read_text())
     return {"Authorization": f"Bearer {saved['access_token']}"}
 
 
