@@ -286,7 +286,7 @@ button:hover { opacity: 0.9; }
 /* 图片流 */
 .page-viewer { display: flex; flex-direction: column; gap: 12px; }
 .page-item { text-align: center; background: var(--surface); border-radius: var(--radius); overflow: hidden; }
-.page-image { max-width: 100%; min-height: 40vh; object-fit: contain; display: block; margin: 0 auto; }
+.page-image { width: 100%; height: 80vh; object-fit: contain; display: block; margin: 0 auto; }
 .page-num { padding: 6px; font-size: 12px; color: var(--text-dim); background: rgba(0,0,0,0.5); }
 
 .illust-badges { display: flex; gap: 4px; margin-top: 4px; }
