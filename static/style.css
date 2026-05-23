@@ -59,9 +59,11 @@ body {
 /* 提示 */
 .alert { padding: 10px 16px; border-radius: var(--radius); margin-bottom: 16px; font-size: 14px; }
 .alert-error { background: #3a1515; color: #f48771; border: 1px solid #5a2525; }
+.alert-warn { background: #3a2e15; color: #f4c771; border: 1px solid #5a4525; }
 
 /* 工具栏 */
 .toolbar { margin-bottom: 16px; }
+.toolbar-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .filter-bar {
     display: flex;
     flex-wrap: wrap;

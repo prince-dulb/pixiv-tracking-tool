@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Request, Query
+from fastapi.responses import RedirectResponse
 
 from ..models import Session, TrackedArtist, Illustration
-from ..web import templates
+from ..web import templates, get_tracker
 
 router = APIRouter(tags=["works"])
 
@@ -57,3 +58,12 @@ async def artist_works(request: Request, artist_id: int):
         request, "artist_works.html",
         {"artist": artist, "illustrations": illustrations},
     )
+
+
+@router.post("/refresh")
+async def refresh_all():
+    tracker = get_tracker()
+    if tracker:
+        tracker.check_updates()
+        tracker.download_pending()
+    return RedirectResponse("/", status_code=303)

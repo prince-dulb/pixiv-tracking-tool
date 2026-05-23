@@ -2,12 +2,17 @@
 {% block content %}
 
 <div class="toolbar">
-    <div class="filter-bar">
-        <span>画师筛选：</span>
-        <a href="/" class="filter-tag {% if not current_artist %}active{% endif %}">全部</a>
-        {% for a in artists %}
-        <a href="/?artist_id={{ a.id }}" class="filter-tag {% if current_artist and current_artist.id == a.id %}active{% endif %}">{{ a.name }}</a>
-        {% endfor %}
+    <div class="toolbar-row">
+        <div class="filter-bar">
+            <span>画师筛选：</span>
+            <a href="/" class="filter-tag {% if not current_artist %}active{% endif %}">全部</a>
+            {% for a in artists %}
+            <a href="/?artist_id={{ a.id }}" class="filter-tag {% if current_artist and current_artist.id == a.id %}active{% endif %}">{{ a.name }}</a>
+            {% endfor %}
+        </div>
+        <form method="post" action="/refresh" style="margin-left: auto;">
+            <button type="submit" class="btn-sm">刷新检查</button>
+        </form>
     </div>
 </div>
 

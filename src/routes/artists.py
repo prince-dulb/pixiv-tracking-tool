@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, Form
+from fastapi import APIRouter, Request, Form, Query
 from fastapi.responses import RedirectResponse
 
 from ..models import Session, TrackedArtist
@@ -8,15 +8,31 @@ router = APIRouter(prefix="/artists", tags=["artists"])
 
 
 @router.get("")
-async def list_artists(request: Request):
+async def list_artists(request: Request, search: str = Query(None)):
     session = Session()
     artists = session.query(TrackedArtist).order_by(TrackedArtist.added_at.desc()).all()
+
+    results = []
+    if search:
+        client = get_client()
+        if client:
+            results = client.search_artist(search)
+        else:
+            session.close()
+            return templates.TemplateResponse(
+                request, "artists.html",
+                {"artists": artists, "results": [], "error": "未登录 Pixiv，无法搜索"}
+            )
+
     session.close()
-    return templates.TemplateResponse(request, "artists.html", {"request": request, "artists": artists})
+    return templates.TemplateResponse(
+        request, "artists.html",
+        {"artists": artists, "results": results, "search_term": search or ""}
+    )
 
 
 @router.post("/add")
-async def add_artist(request: Request, search: str = Form(...)):
+async def add_artist(request: Request, user_id: str = Form(...)):
     client = get_client()
     tracker = get_tracker()
 
@@ -25,29 +41,19 @@ async def add_artist(request: Request, search: str = Form(...)):
         artists = session.query(TrackedArtist).order_by(TrackedArtist.added_at.desc()).all()
         session.close()
         return templates.TemplateResponse(
-            request, "artists.html", {"artists": artists, "error": "未登录 Pixiv，无法添加画师"}
+            request, "artists.html",
+            {"artists": artists, "results": [], "error": "未登录 Pixiv，无法添加画师"}
         )
 
-    if search.isdigit():
-        user_id = search
-    else:
-        results = client.search_artist(search)
-        if not results:
-            session = Session()
-            artists = session.query(TrackedArtist).order_by(TrackedArtist.added_at.desc()).all()
-            session.close()
-            return templates.TemplateResponse(
-                request, "artists.html", {"artists": artists, "error": f"未找到画师: {search}"}
-            )
-        user_id = results[0]["user_id"]
-
     artist, created = tracker.add_artist(user_id)
+    session = Session()
+    artists = session.query(TrackedArtist).order_by(TrackedArtist.added_at.desc()).all()
+    session.close()
+
     if not created:
-        session = Session()
-        artists = session.query(TrackedArtist).order_by(TrackedArtist.added_at.desc()).all()
-        session.close()
         return templates.TemplateResponse(
-            request, "artists.html", {"artists": artists, "error": f"画师 {artist.name} 已在特别关注列表中"}
+            request, "artists.html",
+            {"artists": artists, "results": [], "error": f"画师 {artist.name} 已在特别关注列表中"}
         )
 
     return RedirectResponse("/artists", status_code=303)
@@ -69,4 +75,23 @@ async def toggle_artist(artist_id: int):
         artist.is_active = not artist.is_active
         session.commit()
     session.close()
+    return RedirectResponse("/artists", status_code=303)
+
+
+@router.post("/{artist_id}/refresh")
+async def refresh_artist(artist_id: int):
+    tracker = get_tracker()
+    if tracker:
+        session = Session()
+        artist = session.query(TrackedArtist).get(artist_id)
+        if artist:
+            from ..models import Illustration
+            # 清除旧作品的文件路径，强制重新检查
+            for i in session.query(Illustration).filter_by(artist_id=artist.id).all():
+                i.file_paths = None
+            session.commit()
+            tracker._download_artist(artist.pixiv_user_id)
+            tracker._update_file_paths(session, artist)
+            session.commit()
+        session.close()
     return RedirectResponse("/artists", status_code=303)

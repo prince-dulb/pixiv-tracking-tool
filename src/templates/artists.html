@@ -3,28 +3,56 @@
 
 <h2>画师管理</h2>
 
-<form method="post" action="/artists/add" class="add-form">
-    <input type="text" name="search" placeholder="输入画师名称或 Pixiv user_id 搜索添加" required>
-    <button type="submit">添加特别关注</button>
+<form method="get" action="/artists" class="add-form">
+    <input type="text" name="search" placeholder="搜索画师名称或 Pixiv ID"
+           value="{{ search_term }}" required>
+    <button type="submit">搜索</button>
 </form>
 
+{% if results %}
+<h3 style="margin-top: 16px;">搜索结果</h3>
+<div class="artist-list">
+    {% for r in results %}
+    <div class="artist-card">
+        <img src="{{ r.avatar_url }}" alt="{{ r.name }}" class="artist-avatar" onerror="this.style.display='none'">
+        <div class="artist-info">
+            <div class="artist-name">{{ r.name }}</div>
+            <div class="artist-account">@{{ r.account }} · ID: {{ r.user_id }}</div>
+        </div>
+        <div class="artist-actions">
+            <form method="post" action="/artists/add">
+                <input type="hidden" name="user_id" value="{{ r.user_id }}">
+                <button type="submit">+ 特别关注</button>
+            </form>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% elif search_term %}
+<div class="empty"><p>未找到匹配的画师。</p></div>
+{% endif %}
+
 {% if artists %}
+<h3 style="margin-top: 24px;">已特别关注 ({{ artists|length }})</h3>
 <div class="artist-list">
     {% for artist in artists %}
     <div class="artist-card {% if not artist.is_active %}inactive{% endif %}">
         <img src="{{ artist.avatar_url }}" alt="{{ artist.name }}" class="artist-avatar" onerror="this.style.display='none'">
         <div class="artist-info">
             <div class="artist-name">{{ artist.name }}</div>
-            <div class="artist-account">@{{ artist.pixiv_account or 'unknown' }}</div>
+            <div class="artist-account">@{{ artist.pixiv_account or 'unknown' }} · {{ artist.illustrations|length }} 件作品</div>
             <div class="artist-meta">
                 <span>添加于 {{ artist.added_at.strftime('%Y-%m-%d') if artist.added_at else '' }}</span>
                 {% if artist.last_checked_at %}
-                <span>上次检查：{{ artist.last_checked_at.strftime('%Y-%m-%d %H:%M') }}</span>
+                <span>| 上次检查：{{ artist.last_checked_at.strftime('%m-%d %H:%M') }}</span>
                 {% endif %}
             </div>
         </div>
         <div class="artist-actions">
             <a href="/artist/{{ artist.id }}" class="btn-sm">作品</a>
+            <form method="post" action="/artists/{{ artist.id }}/refresh" style="display:inline">
+                <button type="submit" class="btn-sm">刷新</button>
+            </form>
             <form method="post" action="/artists/{{ artist.id }}/toggle" style="display:inline">
                 <button type="submit" class="btn-sm {% if artist.is_active %}btn-warn{% else %}btn-ok{% endif %}">
                     {{ "暂停" if artist.is_active else "恢复" }}
@@ -37,10 +65,9 @@
     </div>
     {% endfor %}
 </div>
-{% else %}
+{% elif not results %}
 <div class="empty">
-    <p>还没有添加任何画师。</p>
-    <p>在上方搜索框输入画师名或 Pixiv user_id 来添加。</p>
+    <p>还没有特别关注的画师。在上方搜索并添加。</p>
 </div>
 {% endif %}
 

@@ -160,12 +160,14 @@ class Tracker:
             .all()
         )
 
+        web_prefix = f"/images/{artist.pixiv_user_id}"
+
         for illust in pending:
             paths = []
             for f in sorted(artist_dir.iterdir()):
                 if f.name.startswith(f"{illust.pixiv_illust_id}_p"):
-                    paths.append(str(f))
+                    paths.append(f"{web_prefix}/{f.name}")
                 elif f.name.startswith(f"{illust.pixiv_illust_id}."):
-                    paths.append(str(f))
+                    paths.append(f"{web_prefix}/{f.name}")
             if paths:
                 illust.file_paths = ",".join(paths)

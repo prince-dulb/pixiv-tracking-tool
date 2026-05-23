@@ -69,21 +69,22 @@ class PixivClient:
         }
 
     def get_all_artist_illusts(self, user_id):
-        """迭代获取画师的全部作品。"""
-        params = {"user_id": user_id, "type": "illust"}
-        url = "/v1/user/illusts"
+        """迭代获取画师的全部作品（插画 + 漫画）。"""
+        for work_type in ("illust", "manga"):
+            params = {"user_id": user_id, "type": work_type}
+            url = "/v1/user/illusts"
 
-        while True:
-            data = self._get(url, params)
-            for illust in data.get("illusts", []):
-                yield self._parse_illust(illust)
+            while True:
+                data = self._get(url, params)
+                for illust in data.get("illusts", []):
+                    yield self._parse_illust(illust)
 
-            next_url = data.get("next_url")
-            if not next_url:
-                break
-            from urllib.parse import urlparse, parse_qs
-            qs = parse_qs(urlparse(next_url).query)
-            params = {k: v[0] for k, v in qs.items()}
+                next_url = data.get("next_url")
+                if not next_url:
+                    break
+                from urllib.parse import urlparse, parse_qs
+                qs = parse_qs(urlparse(next_url).query)
+                params = {k: v[0] for k, v in qs.items()}
 
     def get_illust_detail(self, illust_id):
         """获取单个作品详情。"""
