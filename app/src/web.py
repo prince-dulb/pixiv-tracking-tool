@@ -7,7 +7,7 @@ from fastapi.templating import Jinja2Templates
 from .config import HOST, PORT, PROJECT_ROOT, resource_path
 from . import config as _cfg
 from .models import init_db
-from .auth import auth
+from .auth import auth, get_pending_login_url, submit_oauth_code
 from .client import PixivClient
 from .tracker import Tracker
 from .scheduler import start_scheduler, stop_scheduler
@@ -31,13 +31,11 @@ async def _init_auth():
     global tracker
     try:
         await asyncio.to_thread(auth)
-        t = Tracker()
-        start_scheduler(t)
-        tracker = t
+        tracker = Tracker()
+        start_scheduler(tracker)
         templates.env.globals["pixiv_logged_in"] = True
         print("[OK] Pixiv 登录成功，追踪功能已就绪")
     except Exception as e:
-        tracker = None
         print(f"[warn] Pixiv 未登录: {e}")
         print("[warn] Web 界面可用，但追踪/下载功能需登录后使用")
 
@@ -71,7 +69,21 @@ app.mount("/static", StaticFiles(directory=resource_path("static")), name="stati
 @app.get("/api/status")
 async def api_status():
     from fastapi.responses import JSONResponse
-    return JSONResponse({"logged_in": tracker is not None})
+    login_url = get_pending_login_url()
+    return JSONResponse({
+        "logged_in": tracker is not None,
+        "login_url": login_url,
+    })
+
+
+@app.post("/api/submit-code")
+async def api_submit_code(data: dict):
+    from fastapi.responses import JSONResponse
+    code = data.get("code", "").strip()
+    if not code:
+        return JSONResponse({"ok": False, "error": "code 不能为空"})
+    submit_oauth_code(code)
+    return JSONResponse({"ok": True})
 
 
 # 动态服务图片文件（支持自定义路径）

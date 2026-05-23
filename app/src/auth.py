@@ -3,6 +3,7 @@ import hashlib
 import secrets
 import base64
 import webbrowser
+import threading
 import requests
 from pathlib import Path
 from datetime import datetime
@@ -13,6 +14,22 @@ import gallery_dl.config as gdl_config
 from .config import PIXIV_REFRESH_TOKEN, DATA_DIR
 
 TOKEN_FILE = DATA_DIR / "pixiv_token.json"
+
+# Web-based OAuth state
+_pending_login_url = None
+_pending_code_verifier = None
+_received_code = None
+_code_event = threading.Event()
+
+
+def get_pending_login_url():
+    return _pending_login_url
+
+
+def submit_oauth_code(code):
+    global _received_code
+    _received_code = code
+    _code_event.set()
 
 CLIENT_ID = "MOBrBDS8blbauoSck0ZfDbtuzpyT"
 CLIENT_SECRET = "lsACyCD94FhDUtGTXi3QzcFE2uU1hqtDaKeqrdwj"
@@ -74,6 +91,10 @@ def _try_refresh_token():
 
 
 def _oauth_pkce():
+    global _pending_login_url, _pending_code_verifier, _received_code
+    _code_event.clear()
+    _received_code = None
+
     code_verifier = base64.urlsafe_b64encode(secrets.token_bytes(32)).rstrip(b"=").decode()
     code_challenge = base64.urlsafe_b64encode(
         hashlib.sha256(code_verifier.encode()).digest()
@@ -98,22 +119,29 @@ def _oauth_pkce():
         print("\n  尝试自动打开浏览器...")
         code = _browser_oauth(login_url)
 
-    # Playwright 不可用时回退到手动方式
+    # Playwright 不可用时：打开浏览器，等待网页端提交 code
     if not code:
-        print("\n  自动捕获失败，改为手动方式：")
-        print(f"\n  1. 在浏览器中打开：\n     {login_url}\n")
-        print("  2. 按 F12 → Network 标签页 → 过滤框输入 callback")
-        print("  3. 登录你的 Pixiv 账号")
-        print("  4. 在 Network 中找到 'callback?state=...' 请求，")
-        print("     复制它的 'code' 参数值\n")
+        print("\n  请在打开的浏览器页面中完成登录，")
+        print("  然后回到 Web 界面粘贴授权 code。\n")
+
+        _pending_login_url = login_url
+        _pending_code_verifier = code_verifier
 
         try:
             webbrowser.open(login_url)
         except Exception:
             pass
 
-        user_input = input("  >> 粘贴 code: ").strip()
-        code = _extract_code(user_input)
+        # 等待网页端提交 code（最长等 3 分钟）
+        if not _code_event.wait(180):
+            _pending_login_url = None
+            _pending_code_verifier = None
+            print("\n[X] 等待授权超时。\n")
+            return None
+
+        code = _extract_code(_received_code)
+        _pending_login_url = None
+        _pending_code_verifier = None
 
     if not code:
         return None

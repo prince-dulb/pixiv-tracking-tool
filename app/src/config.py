@@ -23,12 +23,6 @@ def resource_path(relative_path):
 
 
 env_file = (PROJECT_ROOT if getattr(sys, 'frozen', False) else APP_DIR) / ".env"
-
-# 升级迁移：旧版 .env 在仓库根目录，复制到 app/ 下
-_legacy_env = PROJECT_ROOT / ".env"
-if not getattr(sys, 'frozen', False) and not env_file.exists() and _legacy_env.exists():
-    shutil.copy2(str(_legacy_env), str(env_file))
-
 if not env_file.exists():
     env_file.write_text("""\
 # Pixiv Tracking Tool configuration
@@ -58,7 +52,7 @@ def _resolve_data_root():
 def _migrate_to_data_root():
     """首次用新代码启动时：若 .env 有旧的 IMAGES_DIR 但无 DATA_ROOT，自动迁移。"""
     content = env_file.read_text(encoding='utf-8')
-    if any(l.startswith('DATA_ROOT=') for l in content.split('\n')):
+    if any(l.strip().startswith('DATA_ROOT=') for l in content.split('\n')):
         return
 
     old_images = os.getenv("IMAGES_DIR", "").strip()
@@ -99,16 +93,15 @@ def _migrate_to_data_root():
                     shutil.copy2(str(child), str(dest))
 
     # 更新 .env：添加 DATA_ROOT，清理旧配置项
-    _root_val = str(_default_root.resolve())
     lines = content.split('\n')
     lines = [l for l in lines
              if not l.startswith('IMAGES_DIR=')
              and not l.startswith('DATA_DIR=')]
-    content = '\n'.join(lines).rstrip('\n') + f'\nDATA_ROOT={_root_val}\n'
+    content = '\n'.join(lines).rstrip('\n') + '\nDATA_ROOT=.\n'
     env_file.write_text(content, encoding='utf-8')
 
     # 重载环境变量
-    os.environ["DATA_ROOT"] = _root_val
+    os.environ["DATA_ROOT"] = "."
     os.environ.pop("IMAGES_DIR", None)
     os.environ.pop("DATA_DIR", None)
 
@@ -167,7 +160,7 @@ def set_data_root(new_path):
     content = env_file.read_text(encoding='utf-8') if env_file.exists() else ""
     new_val = str(new_root.resolve())
 
-    if 'DATA_ROOT=' in content:
+    if any(l.strip().startswith('DATA_ROOT=') for l in content.split('\n')):
         # 用字符串替换，避免 re.sub 在 Windows 路径上的转义问题
         lines = content.split('\n')
         lines = [f'DATA_ROOT={new_val}' if l.startswith('DATA_ROOT=') else l for l in lines]
