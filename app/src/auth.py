@@ -31,6 +31,34 @@ def submit_oauth_code(code):
     _received_code = code
     _code_event.set()
 
+
+def validate_oauth_input(user_input):
+    """校验用户粘贴的内容，返回 (code, error_msg)。"""
+    from urllib.parse import urlparse, parse_qs
+
+    user_input = user_input.strip()
+    if not user_input:
+        return None, "内容不能为空"
+
+    # 纯 code 字符串
+    if "=" not in user_input and not user_input.startswith(("http", "pixiv")):
+        return user_input, None
+
+    # URL：从 query 参数提取 code
+    parsed = urlparse(user_input)
+    params = parse_qs(parsed.query)
+    code = params.get("code", [None])[0]
+    if code:
+        return code, None
+
+    if "accounts.pixiv.net" in user_input or "code_challenge" in user_input:
+        return None, "这是登录跳转过程中的临时 URL，没有 code。请按 Ctrl+H 打开浏览器历史记录，搜索 callback，找到 callback?state=...&code=... 那条，复制整条 URL"
+
+    if "code=" in user_input:
+        return user_input.rpartition("code=")[2].split("&")[0], None
+
+    return None, "未找到 code 参数。请确认复制的是完整的 callback URL"
+
 CLIENT_ID = "MOBrBDS8blbauoSck0ZfDbtuzpyT"
 CLIENT_SECRET = "lsACyCD94FhDUtGTXi3QzcFE2uU1hqtDaKeqrdwj"
 HASH_SECRET = "28c1fdd170a5204386cb1313c7077b34f83e4aaf4aa829ce78c231e05b0bae2c"

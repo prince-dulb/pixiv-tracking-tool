@@ -7,7 +7,7 @@ from fastapi.templating import Jinja2Templates
 from .config import HOST, PORT, PROJECT_ROOT, resource_path
 from . import config as _cfg
 from .models import init_db
-from .auth import auth, get_pending_login_url, submit_oauth_code
+from .auth import auth, get_pending_login_url, submit_oauth_code, validate_oauth_input
 from .client import PixivClient
 from .tracker import Tracker
 from .scheduler import start_scheduler, stop_scheduler
@@ -79,9 +79,9 @@ async def api_status():
 @app.post("/api/submit-code")
 async def api_submit_code(data: dict):
     from fastapi.responses import JSONResponse
-    code = data.get("code", "").strip()
-    if not code:
-        return JSONResponse({"ok": False, "error": "code 不能为空"})
+    code, error = validate_oauth_input(data.get("code", ""))
+    if error:
+        return JSONResponse({"ok": False, "error": error})
     submit_oauth_code(code)
     return JSONResponse({"ok": True})
 
