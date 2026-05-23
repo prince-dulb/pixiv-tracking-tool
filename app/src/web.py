@@ -76,6 +76,24 @@ async def api_status():
     })
 
 
+@app.post("/api/restart")
+async def api_restart():
+    import os
+    import sys
+    import time
+    import threading
+    from fastapi.responses import JSONResponse
+
+    def _restart():
+        time.sleep(0.5)
+        python = sys.executable
+        args = [python] + sys.argv
+        os.execv(python, args)
+
+    threading.Thread(target=_restart, daemon=True).start()
+    return JSONResponse({"ok": True})
+
+
 @app.post("/api/submit-code")
 async def api_submit_code(data: dict):
     from fastapi.responses import JSONResponse

@@ -39,30 +39,66 @@
     <h3>数据存储目录</h3>
     <p>所有数据（数据库、token、作品图片）存放在此目录下。当前路径：<code>{{ data_root }}</code></p>
     <p style="color:#888;font-size:13px;">目录内部结构：<code>data/</code>（数据库） + <code>images/</code>（作品图片）</p>
-    <p style="color:var(--accent);font-size:13px;">注意：修改路径后需重启程序才能完全生效。</p>
-    <form method="post" action="/settings/change-path" class="add-form" id="change-path-form">
-        <input type="text" name="new_path" id="new_path" placeholder="输入路径或点击右侧按钮选择" value="{{ data_root }}">
+    <p id="path-msg" style="display:none; color:var(--accent); font-size:13px;"></p>
+    <form id="change-path-form" class="add-form">
+        <input type="text" id="new_path" placeholder="输入路径或点击右侧按钮选择" value="{{ data_root }}">
         <button type="button" id="browse-btn">选择目录...</button>
     </form>
 </div>
 
 <script>
-document.getElementById('browse-btn').addEventListener('click', async () => {
+async function applyPath(path) {
+    if (!path) return;
+    const msg = document.getElementById('path-msg');
     const btn = document.getElementById('browse-btn');
     btn.textContent = '...';
     btn.disabled = true;
+    try {
+        const fd = new FormData();
+        fd.append('new_path', path);
+        const resp = await fetch('/settings/change-path', { method: 'POST', body: fd });
+        const data = await resp.json();
+        if (data.ok) {
+            msg.textContent = '路径已修改，正在重启服务...';
+            msg.style.display = 'block';
+            await fetch('/api/restart', { method: 'POST' });
+            // 轮询等待服务恢复
+            for (let i = 0; i < 30; i++) {
+                await new Promise(r => setTimeout(r, 1000));
+                try {
+                    const r = await fetch('/api/status');
+                    if (r.ok) { location.reload(); return; }
+                } catch(e) {}
+            }
+            location.reload();
+        } else {
+            msg.textContent = '错误: ' + (data.error || '操作失败');
+            msg.style.display = 'block';
+        }
+    } catch (e) {
+        msg.textContent = '操作失败，请重试';
+        msg.style.display = 'block';
+    }
+    btn.textContent = '选择目录...';
+    btn.disabled = false;
+}
+
+document.getElementById('browse-btn').addEventListener('click', async () => {
     try {
         const resp = await fetch('/settings/browse-path', { method: 'POST' });
         const data = await resp.json();
         if (data.path) {
             document.getElementById('new_path').value = data.path;
-            document.getElementById('change-path-form').submit();
+            applyPath(data.path);
         }
     } catch (e) {
         console.error(e);
-        btn.textContent = '选择目录...';
-        btn.disabled = false;
     }
+});
+
+document.getElementById('change-path-form').addEventListener('submit', e => {
+    e.preventDefault();
+    applyPath(document.getElementById('new_path').value.trim());
 });
 </script>
 

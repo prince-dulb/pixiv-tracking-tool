@@ -57,12 +57,9 @@ async def change_path(request: Request, new_path: str = Form(...)):
     try:
         set_data_root(new_path)
     except Exception as e:
-        return templates.TemplateResponse(
-            request, "settings.html",
-            _settings_context() | {"error": f"迁移失败: {e}"}
-        )
+        return JSONResponse({"error": f"迁移失败: {e}"})
 
-    return RedirectResponse("/settings", status_code=303)
+    return JSONResponse({"ok": True})
 
 
 @router.post("/browse-path")
