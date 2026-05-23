@@ -36,14 +36,18 @@
 (function() {
     var btn = document.getElementById('toggle-filters');
     var panel = document.getElementById('filter-panel');
-    btn.textContent = panel.style.display === 'none' ? '筛选' : '收起';
+    var open = localStorage.getItem('filter-panel') === 'open';
+    panel.style.display = open ? 'block' : 'none';
+    btn.textContent = open ? '收起' : '筛选';
     btn.addEventListener('click', function() {
         if (panel.style.display === 'none') {
             panel.style.display = 'block';
             this.textContent = '收起';
+            localStorage.setItem('filter-panel', 'open');
         } else {
             panel.style.display = 'none';
             this.textContent = '筛选';
+            localStorage.setItem('filter-panel', 'closed');
         }
     });
 })();
