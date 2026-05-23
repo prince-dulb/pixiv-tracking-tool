@@ -14,7 +14,7 @@
 <div id="filter-panel" class="detail-filters" style="display:none;">
     <div class="filter-bar">
         <span>画师：</span>
-        <a href="/{% if current_type %}?type={{ current_type }}{% endif %}"
+        <a href="/illust/{{ illust.id }}{% if current_type %}?type={{ current_type }}{% endif %}"
            class="filter-tag {% if not selected_artist_ids %}active{% endif %}">全部</a>
         {% for a in all_artists %}
         <a href="{{ detail_toggle_urls[a.id] }}"
@@ -23,7 +23,7 @@
     </div>
     <div class="filter-bar" style="margin-top:6px;">
         <span>类型：</span>
-        <a href="/{% if selected_artist_ids %}?artist_ids={{ selected_artist_ids|join(',') }}{% endif %}"
+        <a href="/illust/{{ illust.id }}{% if selected_artist_ids %}?artist_ids={{ selected_artist_ids|join(',') }}{% endif %}"
            class="filter-tag {% if not current_type %}active{% endif %}">全部</a>
         {% for t, label in type_labels.items() %}
         <a href="{{ detail_type_urls[t] }}" class="filter-tag {% if current_type == t %}active{% endif %}">{{ label }}</a>

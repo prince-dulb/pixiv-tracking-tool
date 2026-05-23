@@ -154,20 +154,37 @@ async def illust_detail(request: Request, illust_id: int,
         except (ValueError, TypeError):
             pass
 
+    # 详情页筛选 URL 都指向当前插图，只改变查询参数
+    def _detail_url(extra_params):
+        parts = []
+        if extra_params:
+            parts.append(extra_params)
+        if type and "type=" not in (extra_params or ""):
+            parts.append(f"type={type}")
+        qs = "&".join(parts)
+        return f"/illust/{illust_id}?{qs}" if qs else f"/illust/{illust_id}"
+
     detail_toggle_urls = {}
     for a in all_artists:
-        detail_toggle_urls[a.id] = _toggle_url(a.id, selected_ids, type)
+        new_set = selected_ids.copy()
+        if a.id in new_set:
+            new_set.discard(a.id)
+        else:
+            new_set.add(a.id)
+        if new_set:
+            detail_toggle_urls[a.id] = _detail_url(f"artist_ids={_ids_str(new_set)}")
+        else:
+            detail_toggle_urls[a.id] = _detail_url(None)
 
     detail_type_urls = {}
     for t in TYPE_LABELS:
-        params = []
-        if selected_ids:
-            params.append(f"artist_ids={_ids_str(selected_ids)}")
-        if t != type or not type:
-            params.append(f"type={t}")
+        if t == type:
+            detail_type_urls[t] = _detail_url(None)
         else:
-            params = [f"artist_ids={_ids_str(selected_ids)}"] if selected_ids else []
-        detail_type_urls[t] = "/?" + "&".join(params) if params else "/"
+            param = f"type={t}"
+            if selected_ids:
+                param = f"artist_ids={_ids_str(selected_ids)}&{param}"
+            detail_type_urls[t] = _detail_url(param)
 
     session.close()
 
