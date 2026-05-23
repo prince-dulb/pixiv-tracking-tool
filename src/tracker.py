@@ -140,6 +140,12 @@ class Tracker:
 
     def _download_artist(self, user_id):
         """用 gallery-dl 下载画师的全部作品（auto-dedup）。"""
+        # 注入 token 确保 gallery-dl 可用
+        from .auth import configure_gallery_dl, _load_token
+        saved = _load_token()
+        if saved.get("refresh_token"):
+            configure_gallery_dl(saved["refresh_token"])
+
         url = f"https://www.pixiv.net/users/{user_id}"
         try:
             job = gdl_job.DownloadJob(url)
@@ -148,26 +154,22 @@ class Tracker:
             print(f"  [!] 下载出错 ({user_id}): {e}")
 
     def _update_file_paths(self, session, artist):
-        """扫描下载目录，为 DB 中没有 file_paths 的作品匹配本地文件。"""
+        """扫描下载目录，检查并更新所有作品的本地文件路径。缺失的标记为待下载。"""
         artist_dir = IMAGES_DIR / artist.pixiv_user_id
-        if not artist_dir.exists():
-            return
+        web_prefix = f"/images/{artist.pixiv_user_id}"
 
-        pending = (
+        all_illusts = (
             session.query(Illustration)
             .filter_by(artist_id=artist.id)
-            .filter(Illustration.file_paths == None)  # noqa: E711
             .all()
         )
 
-        web_prefix = f"/images/{artist.pixiv_user_id}"
-
-        for illust in pending:
+        for illust in all_illusts:
             paths = []
-            for f in sorted(artist_dir.iterdir()):
-                if f.name.startswith(f"{illust.pixiv_illust_id}_p"):
-                    paths.append(f"{web_prefix}/{f.name}")
-                elif f.name.startswith(f"{illust.pixiv_illust_id}."):
-                    paths.append(f"{web_prefix}/{f.name}")
-            if paths:
-                illust.file_paths = ",".join(paths)
+            if artist_dir.exists():
+                for f in sorted(artist_dir.iterdir()):
+                    if f.name.startswith(f"{illust.pixiv_illust_id}_p"):
+                        paths.append(f"{web_prefix}/{f.name}")
+                    elif f.name.startswith(f"{illust.pixiv_illust_id}."):
+                        paths.append(f"{web_prefix}/{f.name}")
+            illust.file_paths = ",".join(paths) if paths else None
