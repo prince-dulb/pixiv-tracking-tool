@@ -89,28 +89,36 @@ def _oauth_pkce():
     print("\n" + "=" * 55)
     print("  Pixiv 需要浏览器授权登录")
     print("=" * 55)
-    print(f"\n1. 在浏览器中打开以下链接：\n\n  {login_url}\n")
-    print("2. 按 F12 打开开发者工具，切换到 Network/网络 标签页")
-    print("3. 在打开的页面登录你的 Pixiv 账号")
-    print("4. 登录成功后，在 Network 中找到 'callback?state=...' 这条请求")
-    print("5. 点击这条请求，复制它的 'code' 查询参数的值\n")
-    print("   (code 有效期只有 30 秒，请在登录后尽快操作)\n")
+    print(f"""
+1. 浏览器会打开 Pixiv 登录页面（如未自动打开，复制上面的链接）
+
+2. 在登录页面按 F12，点击顶部 "Network"（网络）标签页
+   在 Network 标签页顶部的过滤框里输入: callback
+   （这样只会显示 callback 相关的请求，方便查找）
+
+3. 正常登录你的 Pixiv 账号
+
+4. 登录成功后，Network 标签页里会出现一条 "callback?state=..."
+   的请求。点击它，右侧会显示该请求的详情。
+
+5. 在右侧找到 "Query String Parameters"（查询字符串参数），
+   复制 code 那一行的值（一长串字符，不是 code_challenge）
+""")
 
     try:
         webbrowser.open(login_url)
-        print("  (已尝试自动打开浏览器)\n")
     except Exception:
         pass
 
-    user_input = input("  >> 粘贴 code 参数的值: ").strip()
+    user_input = input("  >> 粘贴 code: ").strip()
 
-    # 从用户输入中提取 code（兼容粘贴完整 URL 的情况）
-    code = user_input.rpartition("=")[2].strip()
+    code = _extract_code(user_input)
     if not code:
-        print("\n[X] 未能提取到授权码。\n")
         return None
 
-    # 用 code 换取 token（对齐 gallery-dl 的实现）
+    print(f"  code={code[:20]}...")
+
+    # 用 code 换取 token
     headers = {
         "User-Agent": "PixivAndroidApp/5.0.234 (Android 11; Pixel 5)",
     }
@@ -144,6 +152,50 @@ def _oauth_pkce():
     _save_token(resp["access_token"], resp["refresh_token"])
     print("\n[OK] 登录成功！\n")
     return resp["refresh_token"]
+
+
+def _extract_code(user_input):
+    """从用户输入中提取 authorization code。
+
+    用户可能粘贴：
+    - 纯 code 字符串：直接返回
+    - callback URL (code=xxx)：提取 code 参数
+    - 中间跳转 URL（没有 code 参数）：报错并提示正确操作
+    """
+    from urllib.parse import urlparse, parse_qs
+
+    if not user_input:
+        return None
+
+    user_input = user_input.strip()
+
+    # 纯 code 字符串（不含 = 号，不以 http 开头）
+    if "=" not in user_input and not user_input.startswith(("http", "pixiv")):
+        return user_input
+
+    # URL：尝试从 query 参数中提取 code
+    parsed = urlparse(user_input)
+    params = parse_qs(parsed.query)
+    code = params.get("code", [None])[0]
+
+    if code:
+        return code
+
+    # 没有 code 参数——分析用户错误粘贴了什么
+    if "accounts.pixiv.net" in user_input or "code_challenge" in user_input:
+        print("\n  [!] 这是登录跳转过程中的 URL，里面没有 code 参数。")
+        print("  你需要从 Network 标签页的 callback 请求中获取 code：")
+        print("  1. 在 Network 过滤框输入 callback 缩小范围")
+        print("  2. 找到 callback?state=... 这条请求")
+        print("  3. 点击后在右侧 Query String Parameters 里复制 code 的值\n")
+        return None
+
+    # URL 里有 code= 但 parse_qs 没提取到（可能是嵌套 URL），兜底提取
+    if "code=" in user_input:
+        return user_input.rpartition("code=")[2].split("&")[0]
+
+    print("\n  [!] 未找到 code 参数。请确认操作正确。\n")
+    return None
 
 
 def configure_gallery_dl(refresh_token):
