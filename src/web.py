@@ -13,7 +13,6 @@ from .scheduler import start_scheduler, stop_scheduler
 templates = Jinja2Templates(directory=str(PROJECT_ROOT / "src" / "templates"))
 
 # 全局实例，在 startup 时初始化
-pixiv_client: PixivClient = None
 tracker: Tracker = None
 
 
@@ -22,24 +21,22 @@ def get_tracker():
 
 
 def get_client():
-    return pixiv_client
+    return PixivClient() if tracker else None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global pixiv_client, tracker
+    global tracker
 
     init_db()
 
     try:
-        api = auth()
-        pixiv_client = PixivClient(api)
-        tracker = Tracker(pixiv_client)
+        auth()
+        tracker = Tracker()
         start_scheduler(tracker)
     except Exception as e:
         print(f"[warn] Pixiv 未登录: {e}")
         print("[warn] Web 界面可用，但追踪/下载功能需登录后使用")
-        pixiv_client = None
         tracker = None
 
     from .routes import artists, works, settings
@@ -47,8 +44,7 @@ async def lifespan(app: FastAPI):
     app.include_router(works.router)
     app.include_router(settings.router)
 
-    # 添加全局变量到模板
-    templates.env.globals["pixiv_logged_in"] = pixiv_client is not None
+    templates.env.globals["pixiv_logged_in"] = tracker is not None
 
     yield
 

@@ -2,7 +2,6 @@ from fastapi import APIRouter, Request
 from fastapi.responses import RedirectResponse
 
 from ..web import get_tracker, templates
-from ..downloader import Downloader
 from ..models import Session
 
 router = APIRouter(prefix="/settings", tags=["settings"])
@@ -33,7 +32,7 @@ async def check_now():
     tracker = get_tracker()
     if tracker:
         tracker.check_updates()
-        tracker.downloader.download_pending(Session())
+        tracker.download_pending()
     return RedirectResponse("/settings", status_code=303)
 
 
@@ -41,5 +40,5 @@ async def check_now():
 async def download_pending():
     tracker = get_tracker()
     if tracker:
-        tracker.downloader.download_pending(Session())
+        tracker.download_pending()
     return RedirectResponse("/settings", status_code=303)

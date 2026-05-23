@@ -3,18 +3,27 @@ import hashlib
 import secrets
 import base64
 import webbrowser
+import requests
 from pathlib import Path
-from pixivpy3 import AppPixivAPI
+from datetime import datetime
+from requests.structures import CaseInsensitiveDict
 
-from .config import PIXIV_USERNAME, PIXIV_PASSWORD, PIXIV_REFRESH_TOKEN, DATA_DIR
+import gallery_dl.config as gdl_config
+
+from .config import PIXIV_REFRESH_TOKEN, DATA_DIR
 
 TOKEN_FILE = DATA_DIR / "pixiv_token.json"
 
+# gallery-dl 内置的 Pixiv 客户端凭证
+CLIENT_ID = "MOBrBDS8blbauoSck0ZfDbtuzpyT"
+CLIENT_SECRET = "lsACyCD94FhDUtGTXi3QzcFE2uU1hqtDaKeqrdwj"
+HASH_SECRET = "28c1fdd170a5204386cb1313c7077b34f83e4aaf4aa829ce78c231e05b0bae2c"
 
-def _save_token(api):
+
+def _save_token(access_token, refresh_token):
     TOKEN_FILE.write_text(json.dumps({
-        "access_token": api.access_token,
-        "refresh_token": api.refresh_token,
+        "access_token": access_token,
+        "refresh_token": refresh_token,
     }))
 
 
@@ -24,23 +33,54 @@ def _load_token():
     return {}
 
 
-def _try_refresh_token(api):
+def _try_refresh_token():
     """尝试用本地保存的或 .env 中的 refresh_token 恢复会话。"""
     saved = _load_token()
     refresh_token = saved.get("refresh_token") or PIXIV_REFRESH_TOKEN
 
     if not refresh_token:
-        return False
+        return None
 
     try:
-        api.auth(refresh_token=refresh_token)
-        _save_token(api)
-        return True
+        # 用 refresh_token 获取新的 access_token
+        local_time = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S+00:00")
+        headers = CaseInsensitiveDict({
+            "x-client-time": local_time,
+            "x-client-hash": hashlib.md5(
+                (local_time + HASH_SECRET).encode("utf-8")
+            ).hexdigest(),
+            "app-os": "ios",
+            "app-os-version": "14.6",
+            "user-agent": "PixivIOSApp/7.13.3 (iOS 14.6; iPhone13,2)",
+        })
+
+        data = {
+            "client_id": CLIENT_ID,
+            "client_secret": CLIENT_SECRET,
+            "grant_type": "refresh_token",
+            "refresh_token": refresh_token,
+            "get_secure_url": "1",
+        }
+
+        r = requests.post(
+            "https://oauth.secure.pixiv.net/auth/token",
+            headers=headers, data=data, timeout=30,
+        )
+
+        if r.status_code != 200:
+            return None
+
+        resp = r.json()
+        access_token = resp["access_token"]
+        new_refresh_token = resp.get("refresh_token", refresh_token)
+        _save_token(access_token, new_refresh_token)
+        return new_refresh_token
+
     except Exception:
-        return False
+        return None
 
 
-def _oauth_pkce(api):
+def _oauth_pkce():
     """通过浏览器 OAuth PKCE 流程获取 refresh_token。"""
     code_verifier = base64.urlsafe_b64encode(secrets.token_bytes(32)).rstrip(b"=").decode()
     code_challenge = base64.urlsafe_b64encode(
@@ -62,7 +102,6 @@ def _oauth_pkce(api):
     print("3. 登录成功后浏览器会跳转到一个空白页(pixiv://...)，")
     print("   复制地址栏中的完整 URL\n")
 
-    # 尝试自动打开浏览器
     try:
         webbrowser.open(login_url)
         print("  (已尝试自动打开浏览器)\n")
@@ -71,41 +110,16 @@ def _oauth_pkce(api):
 
     callback_url = input("  >> 粘贴跳转后的 URL: ").strip()
 
-    # 从回调 URL 中提取 code
     code = _extract_code(callback_url)
     if not code:
         print("\n✗ 未能从 URL 中提取授权码。\n")
         return None
 
-    # 用 code 换取 token
-    try:
-        api.auth(
-            refresh_token=code,
-            headers={
-                "grant_type": "authorization_code",
-                "code_verifier": code_verifier,
-            },
-        )
-    except Exception:
-        # pixivpy 的 auth() 不支持 authorization_code grant，需要手动请求
-        return _token_exchange(code, code_verifier, api)
-
-    _save_token(api)
-    print("\n✓ 登录成功！\n")
-    return api
-
-
-def _token_exchange(code, code_verifier, api):
-    """手动完成 authorization_code → token 交换。"""
-    import requests
-    from datetime import datetime
-    from requests.structures import CaseInsensitiveDict
-
     local_time = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S+00:00")
     headers = CaseInsensitiveDict({
         "x-client-time": local_time,
         "x-client-hash": hashlib.md5(
-            (local_time + api.hash_secret).encode("utf-8")
+            (local_time + HASH_SECRET).encode("utf-8")
         ).hexdigest(),
         "app-os": "ios",
         "app-os-version": "14.6",
@@ -113,37 +127,37 @@ def _token_exchange(code, code_verifier, api):
     })
 
     data = {
-        "client_id": api.client_id,
-        "client_secret": api.client_secret,
+        "client_id": CLIENT_ID,
+        "client_secret": CLIENT_SECRET,
         "grant_type": "authorization_code",
         "code": code,
         "code_verifier": code_verifier,
         "get_secure_url": "1",
     }
 
-    r = requests.post("https://oauth.secure.pixiv.net/auth/token", headers=headers, data=data)
+    r = requests.post(
+        "https://oauth.secure.pixiv.net/auth/token",
+        headers=headers, data=data, timeout=30,
+    )
+
     if r.status_code != 200:
         print(f"\n✗ Token 交换失败: HTTP {r.status_code}")
         print(f"  {r.text}\n")
         return None
 
     resp = r.json()
-    api.access_token = resp["access_token"]
-    api.refresh_token = resp["refresh_token"]
-    if "user" in resp:
-        api.user_id = str(resp["user"]["id"])
-
-    _save_token(api)
+    _save_token(resp["access_token"], resp["refresh_token"])
     print("\n✓ 登录成功！\n")
-    return api
+    return resp["refresh_token"]
 
 
 def _extract_code(url_string):
     """从回调 URL 中提取 authorization code。"""
     from urllib.parse import urlparse, parse_qs
 
+    if not url_string:
+        return None
     if "code=" not in url_string:
-        # 也许是直接粘贴的 code
         return url_string
 
     parsed = urlparse(url_string.strip())
@@ -152,33 +166,36 @@ def _extract_code(url_string):
     return codes[0] if codes else None
 
 
-def _password_login(api):
-    """旧版账号密码登录（Pixiv 已禁用此方式，保留作为兜底）。"""
-    api.login(PIXIV_USERNAME, PIXIV_PASSWORD)
-    _save_token(api)
-    return api
+def configure_gallery_dl(refresh_token):
+    """将 refresh_token 配置到 gallery-dl 全局设置。"""
+    project_root = Path(__file__).parent.parent
+    gdl_config.set((), 'extractor', {
+        'pixiv': {
+            'refresh-token': refresh_token,
+            'directory': ['images', '{user[id]}'],
+            'archive': str(DATA_DIR / 'gallery_dl_archive.db'),
+        }
+    })
+    gdl_config.set((), 'base-directory', str(project_root))
+    gdl_config.set((), 'output', {
+        'mode': 'auto',
+        'skip': 'true',  # 跳过已存在的文件
+        'progress': 'false',
+    })
 
 
 def auth():
-    """认证入口：refresh_token → OAuth PKCE → password 依次尝试。"""
-    api = AppPixivAPI()
-
+    """认证入口：refresh_token → OAuth PKCE 依次尝试。"""
     # 1. 尝试 refresh_token 恢复
-    if _try_refresh_token(api):
-        return api
+    token = _try_refresh_token()
+    if token:
+        configure_gallery_dl(token)
+        return
 
     # 2. 尝试 OAuth PKCE 流程
-    if _oauth_pkce(api):
-        return api
+    token = _oauth_pkce()
+    if token:
+        configure_gallery_dl(token)
+        return
 
-    # 3. 兜底：账号密码登录
-    if PIXIV_USERNAME and PIXIV_PASSWORD:
-        print("\n尝试密码登录（可能失败）...")
-        try:
-            return _password_login(api)
-        except Exception as e:
-            print(f"\n密码登录也失败了: {e}")
-
-    raise RuntimeError(
-        "Pixiv 登录失败。请通过浏览器 OAuth 流程授权。"
-    )
+    raise RuntimeError("Pixiv 登录失败。请通过浏览器 OAuth 流程授权。")

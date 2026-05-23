@@ -1,21 +1,50 @@
-import time
-from pixivpy3 import AppPixivAPI
+import json
+import requests
+from pathlib import Path
 
-from .config import REQUEST_DELAY
+from .config import DATA_DIR
+from .auth import CLIENT_ID, CLIENT_SECRET, HASH_SECRET
+
+TOKEN_FILE = DATA_DIR / "pixiv_token.json"
+
+API_HOST = "https://app-api.pixiv.net"
+
+
+def _get_auth_header():
+    """获取当前有效的 access_token 用于 API 请求。"""
+    if not TOKEN_FILE.exists():
+        return {}
+
+    saved = json.loads(TOKEN_FILE.read_text())
+    return {"Authorization": f"Bearer {saved['access_token']}"}
 
 
 class PixivClient:
-    def __init__(self, api: AppPixivAPI):
-        self.api = api
+    def __init__(self):
+        pass
 
-    def _delay(self):
-        if REQUEST_DELAY > 0:
-            time.sleep(REQUEST_DELAY)
+    def _get(self, endpoint, params=None):
+        headers = _get_auth_header()
+        headers["Accept-Language"] = "zh-cn"
+        headers["App-OS"] = "ios"
+        headers["App-OS-Version"] = "16.7.2"
+        headers["App-Version"] = "7.19.1"
+        headers["User-Agent"] = "PixivIOSApp/7.19.1 (iOS 16.7.2; iPhone14,2)"
+
+        r = requests.get(
+            f"{API_HOST}{endpoint}",
+            headers=headers,
+            params=params or {},
+            timeout=30,
+        )
+        data = r.json()
+        if "error" in data:
+            raise RuntimeError(f"API error: {data['error']}")
+        return data
 
     def search_artist(self, keyword):
-        """搜索画师，返回用户列表。"""
-        self._delay()
-        result = self.api.search_user(keyword)
+        """搜索画师。"""
+        result = self._get("/v1/search/user", {"word": keyword, "filter": "for_ios"})
         users = result.get("user_previews", [])
         return [
             {
@@ -29,8 +58,7 @@ class PixivClient:
 
     def get_artist_detail(self, user_id):
         """获取画师详细信息。"""
-        self._delay()
-        result = self.api.user_detail(user_id)
+        result = self._get("/v1/user/detail", {"user_id": user_id})
         user = result["user"]
         return {
             "user_id": str(user["id"]),
@@ -40,75 +68,59 @@ class PixivClient:
             "total_illusts": user.get("total_illusts", 0),
         }
 
-    def get_artist_illusts(self, user_id, offset=None):
-        """获取画师的单页作品列表。"""
-        self._delay()
-        result = self.api.user_illusts(user_id, type="illust", offset=offset)
-        if "error" in result:
-            raise RuntimeError(f"API error: {result['error']}")
-        return result.get("illusts", []), result.get("next_url")
-
     def get_all_artist_illusts(self, user_id):
         """迭代获取画师的全部作品。"""
-        offset = None
+        params = {"user_id": user_id, "type": "illust"}
+        url = "/v1/user/illusts"
+
         while True:
-            illusts, next_url = self.get_artist_illusts(user_id, offset)
-            for illust in illusts:
+            data = self._get(url, params)
+            for illust in data.get("illusts", []):
                 yield self._parse_illust(illust)
+
+            next_url = data.get("next_url")
             if not next_url:
                 break
-            # 从 next_url 提取 offset 参数
-            offset = self._extract_offset(next_url)
+            from urllib.parse import urlparse, parse_qs
+            qs = parse_qs(urlparse(next_url).query)
+            params = {k: v[0] for k, v in qs.items()}
 
     def get_illust_detail(self, illust_id):
         """获取单个作品详情。"""
-        self._delay()
-        result = self.api.illust_detail(illust_id)
-        if "error" in result:
-            raise RuntimeError(f"API error: {result['error']}")
-        return self._parse_illust(result["illust"])
-
-    def download(self, url, path, name=None):
-        """下载图片到指定目录，返回下载后的本地路径。"""
-        import os
-        os.makedirs(path, exist_ok=True)
-        self.api.download(url, path=path, name=name)
+        data = self._get("/v1/illust/detail", {"illust_id": illust_id})
+        return self._parse_illust(data["illust"])
 
     @staticmethod
     def _parse_illust(illust):
-        return {
-            "illust_id": str(illust["id"]),
-            "title": illust["title"],
-            "type": illust.get("type", "illust"),
-            "page_count": illust.get("page_count", 1),
-            "tags": [t["name"] for t in illust.get("tags", [])],
-            "bookmark_count": illust.get("total_bookmarks", 0),
-            "view_count": illust.get("total_view", 0),
-            "posted_at": illust.get("create_date"),
-            "urls": [
+        tags = [t["name"] for t in illust.get("tags", [])]
+
+        if illust.get("meta_pages"):
+            urls = [
                 {
                     "thumb": p["image_urls"].get("square_medium"),
                     "medium": p["image_urls"].get("medium"),
                     "original": p["image_urls"].get("original"),
                 }
-                for p in illust.get("meta_pages", [])
+                for p in illust["meta_pages"]
             ]
-            or [
+        else:
+            urls = [
                 {
                     "thumb": illust["image_urls"].get("square_medium"),
                     "medium": illust["image_urls"].get("medium"),
                     "original": illust.get("meta_single_page", {}).get("original_image_url")
                     or illust["image_urls"].get("large"),
                 }
-            ],
-        }
+            ]
 
-    @staticmethod
-    def _extract_offset(next_url):
-        """从 next_url 中提取 offset 参数值。"""
-        if not next_url:
-            return None
-        from urllib.parse import urlparse, parse_qs
-        qs = parse_qs(urlparse(next_url).query)
-        offsets = qs.get("offset", [])
-        return int(offsets[0]) if offsets else None
+        return {
+            "illust_id": str(illust["id"]),
+            "title": illust["title"],
+            "type": illust.get("type", "illust"),
+            "page_count": illust.get("page_count", 1),
+            "tags": tags,
+            "bookmark_count": illust.get("total_bookmarks", 0),
+            "view_count": illust.get("total_view", 0),
+            "posted_at": illust.get("create_date"),
+            "urls": urls,
+        }

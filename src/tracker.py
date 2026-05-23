@@ -1,16 +1,20 @@
 import json
+import os
+import re
 from datetime import datetime
 from sqlalchemy import and_
 
+import gallery_dl.config as gdl_config
+import gallery_dl.job as gdl_job
+
 from .client import PixivClient
-from .downloader import Downloader
+from .config import IMAGES_DIR, DATA_DIR
 from .models import Session, TrackedArtist, Illustration
 
 
 class Tracker:
-    def __init__(self, client: PixivClient):
-        self.client = client
-        self.downloader = Downloader(client)
+    def __init__(self):
+        self.client = PixivClient()
 
     def add_artist(self, user_id):
         """添加一个特别关注画师，并拉取其全部已有作品。"""
@@ -19,7 +23,7 @@ class Tracker:
         existing = session.query(TrackedArtist).filter_by(pixiv_user_id=user_id).first()
         if existing:
             session.close()
-            return existing, False  # 已存在，不重复添加
+            return existing, False
 
         info = self.client.get_artist_detail(user_id)
         artist = TrackedArtist(
@@ -32,12 +36,13 @@ class Tracker:
         session.commit()
 
         self._fetch_all_illusts(session, artist)
+        self._download_artist(artist.pixiv_user_id)
+        self._update_file_paths(session, artist)
 
         session.close()
         return artist, True
 
     def remove_artist(self, artist_id):
-        """移除特别关注画师及其所有作品记录。"""
         session = Session()
         artist = session.query(TrackedArtist).get(artist_id)
         if artist:
@@ -53,6 +58,9 @@ class Tracker:
 
         for artist in artists:
             new_count = self._fetch_new_illusts(session, artist)
+            if new_count > 0:
+                self._download_artist(artist.pixiv_user_id)
+                self._update_file_paths(session, artist)
             results[artist.name] = new_count
             artist.last_checked_at = datetime.utcnow()
 
@@ -60,8 +68,24 @@ class Tracker:
         session.close()
         return results
 
+    def download_pending(self):
+        """下载所有未下载的作品。"""
+        session = Session()
+        artists = session.query(TrackedArtist).filter_by(is_active=True).all()
+        for artist in artists:
+            pending = (
+                session.query(Illustration)
+                .filter_by(artist_id=artist.id)
+                .filter(Illustration.file_paths == None)  # noqa: E711
+                .count()
+            )
+            if pending > 0:
+                self._download_artist(artist.pixiv_user_id)
+                self._update_file_paths(session, artist)
+        session.commit()
+        session.close()
+
     def _fetch_all_illusts(self, session, artist):
-        """拉取画师全部已有作品并入库。"""
         count = 0
         for illust_data in self.client.get_all_artist_illusts(artist.pixiv_user_id):
             self._save_illust(session, artist, illust_data)
@@ -69,7 +93,6 @@ class Tracker:
         return count
 
     def _fetch_new_illusts(self, session, artist):
-        """只拉取画师的新作品（数据库中没有的）。"""
         count = 0
         for illust_data in self.client.get_all_artist_illusts(artist.pixiv_user_id):
             exists = (
@@ -78,7 +101,6 @@ class Tracker:
                 .first()
             )
             if exists:
-                # 假设作品按时间倒序返回，遇到已存在就停止
                 break
             self._save_illust(session, artist, illust_data)
             count += 1
@@ -99,3 +121,35 @@ class Tracker:
         session.add(illust)
         session.commit()
         return illust
+
+    def _download_artist(self, user_id):
+        """用 gallery-dl 下载画师的全部作品（auto-dedup）。"""
+        url = f"https://www.pixiv.net/users/{user_id}"
+        try:
+            job = gdl_job.DownloadJob(url)
+            job.run()
+        except Exception:
+            pass  # gallery-dl 内部处理大部分错误
+
+    def _update_file_paths(self, session, artist):
+        """扫描下载目录，为 DB 中没有 file_paths 的作品匹配本地文件。"""
+        artist_dir = IMAGES_DIR / artist.pixiv_user_id
+        if not artist_dir.exists():
+            return
+
+        pending = (
+            session.query(Illustration)
+            .filter_by(artist_id=artist.id)
+            .filter(Illustration.file_paths == None)  # noqa: E711
+            .all()
+        )
+
+        for illust in pending:
+            paths = []
+            for f in sorted(artist_dir.iterdir()):
+                if f.name.startswith(f"{illust.pixiv_illust_id}_p"):
+                    paths.append(str(f))
+                elif f.name.startswith(f"{illust.pixiv_illust_id}."):
+                    paths.append(str(f))
+            if paths:
+                illust.file_paths = ",".join(paths)
