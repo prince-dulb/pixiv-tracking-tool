@@ -139,17 +139,17 @@ async def illust_detail(request: Request, illust_id: int,
     all_ids = [row[0] for row in all_rows]
     try:
         current_idx = all_ids.index(illust.id)
+        prev_id = all_ids[current_idx - 1] if current_idx > 0 else None
+        next_id = all_ids[current_idx + 1] if current_idx < len(all_ids) - 1 else None
     except ValueError:
-        # 当前图不在筛选范围，找它应插入的位置作为导航锚点
-        current_idx = 0
+        # 当前图不在筛选范围，找插入位置作为导航锚点
+        current_idx = len(all_ids)
         for i, (rid, rdate) in enumerate(all_rows):
             if illust.posted_at and rdate and rdate <= illust.posted_at:
                 current_idx = i
                 break
-            current_idx = i + 1
-
-    prev_id = all_ids[current_idx - 1] if current_idx > 0 and current_idx <= len(all_ids) else None
-    next_id = all_ids[current_idx] if current_idx < len(all_ids) else None
+        prev_id = all_ids[current_idx - 1] if current_idx > 0 else None
+        next_id = all_ids[current_idx] if current_idx < len(all_ids) else None
 
     # 构建导航链接的查询参数
     params = []

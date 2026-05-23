@@ -280,8 +280,12 @@ button:hover { opacity: 0.9; }
 .side-arrow:hover { background: rgba(74,158,255,0.4); color: #fff; }
 .side-prev { left: 0; border-radius: 0 8px 8px 0; }
 .side-next { right: 0; border-radius: 8px 0 0 8px; }
-@media (max-width: 768px) {
-    .side-arrow { display: none; }
+@media (max-width: 640px) {
+    .side-arrow { width: 28px; font-size: 18px; opacity: 0.5; }
+    .side-arrow:hover { opacity: 1; }
+    .container { padding-left: 36px; padding-right: 36px; }
+    .detail-filters { margin-left: -20px; margin-right: -20px; }
+    .detail-nav { flex-wrap: wrap; gap: 8px; }
 }
 
 /* 图片流 */
