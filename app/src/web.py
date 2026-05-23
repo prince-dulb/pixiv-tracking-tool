@@ -87,7 +87,10 @@ async def api_restart():
 
     def _restart():
         time.sleep(0.5)
-        subprocess.Popen([sys.executable])
+        exe = sys.executable
+        cwd = os.path.dirname(exe)
+        subprocess.Popen([exe], cwd=cwd,
+                         creationflags=subprocess.CREATE_NEW_CONSOLE if sys.platform == 'win32' else 0)
         os._exit(0)
 
     threading.Thread(target=_restart, daemon=True).start()
