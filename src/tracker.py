@@ -1,7 +1,7 @@
 import json
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import and_
 
 import gallery_dl.config as gdl_config
@@ -10,6 +10,18 @@ import gallery_dl.job as gdl_job
 from .client import PixivClient
 from .config import IMAGES_DIR, DATA_DIR
 from .models import Session, TrackedArtist, Illustration
+
+
+def _parse_iso_date(s):
+    """将 Pixiv API 返回的 ISO 8601 日期字符串转为 datetime。"""
+    try:
+        return datetime.fromisoformat(s)
+    except ValueError:
+        # 处理 Python 3.11 之前不支持的时区格式
+        s = s.replace("Z", "+00:00")
+        if s.endswith("+00:00"):
+            s = s[:-6]
+        return datetime.fromisoformat(s)
 
 
 class Tracker:
@@ -107,6 +119,10 @@ class Tracker:
         return count
 
     def _save_illust(self, session, artist, illust_data):
+        posted_at = illust_data.get("posted_at")
+        if posted_at and isinstance(posted_at, str):
+            posted_at = _parse_iso_date(posted_at)
+
         illust = Illustration(
             pixiv_illust_id=illust_data["illust_id"],
             artist_id=artist.id,
@@ -116,7 +132,7 @@ class Tracker:
             tags=json.dumps(illust_data["tags"], ensure_ascii=False),
             bookmark_count=illust_data["bookmark_count"],
             view_count=illust_data["view_count"],
-            posted_at=illust_data["posted_at"],
+            posted_at=posted_at,
         )
         session.add(illust)
         session.commit()
