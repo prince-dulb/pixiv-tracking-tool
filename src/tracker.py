@@ -70,8 +70,15 @@ class Tracker:
 
         for artist in artists:
             new_count = self._fetch_new_illusts(session, artist)
-            if new_count > 0:
-                self._download_artist(artist.pixiv_user_id)
+            self._update_file_paths(session, artist)
+            session.commit()
+            missing = (
+                session.query(Illustration)
+                .filter_by(artist_id=artist.id)
+                .filter(Illustration.file_paths == None).count()
+            )
+            if new_count > 0 or missing > 0:
+                self._download_artist(artist.pixiv_user_id, clear_archive=(missing > 0))
                 self._update_file_paths(session, artist)
             results[artist.name] = new_count
             artist.last_checked_at = datetime.utcnow()
@@ -81,18 +88,19 @@ class Tracker:
         return results
 
     def download_pending(self):
-        """下载所有未下载的作品。"""
+        """下载所有未下载的文件缺失的作品。"""
         session = Session()
         artists = session.query(TrackedArtist).filter_by(is_active=True).all()
         for artist in artists:
-            pending = (
+            self._update_file_paths(session, artist)
+            session.commit()
+            missing = (
                 session.query(Illustration)
                 .filter_by(artist_id=artist.id)
-                .filter(Illustration.file_paths == None)  # noqa: E711
-                .count()
+                .filter(Illustration.file_paths == None).count()
             )
-            if pending > 0:
-                self._download_artist(artist.pixiv_user_id)
+            if missing > 0:
+                self._download_artist(artist.pixiv_user_id, clear_archive=True)
                 self._update_file_paths(session, artist)
         session.commit()
         session.close()
@@ -138,13 +146,18 @@ class Tracker:
         session.commit()
         return illust
 
-    def _download_artist(self, user_id):
+    def _download_artist(self, user_id, clear_archive=False):
         """用 gallery-dl 下载画师的全部作品（auto-dedup）。"""
-        # 注入 token 确保 gallery-dl 可用
         from .auth import configure_gallery_dl, _load_token
         saved = _load_token()
         if saved.get("refresh_token"):
             configure_gallery_dl(saved["refresh_token"])
+
+        # 如果文件被删了需要重新下载，先清除 archive 让 gallery-dl 不跳过
+        if clear_archive:
+            archive = DATA_DIR / "gallery_dl_archive.db"
+            if archive.exists():
+                archive.unlink()
 
         url = f"https://www.pixiv.net/users/{user_id}"
         try:
