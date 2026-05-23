@@ -24,7 +24,7 @@
         <div class="illust-info">
             <div class="illust-title" title="{{ illust.title }}">{{ illust.title }}</div>
             <div class="illust-meta">
-                <span>{{ illust.posted_at[:10] if illust.posted_at else '' }}</span>
+                <span>{{ illust.posted_at.strftime('%Y-%m-%d') if illust.posted_at else '' }}</span>
                 <span>♥ {{ illust.bookmark_count or 0 }}</span>
             </div>
         </div>

@@ -26,7 +26,7 @@
             <div class="illust-title" title="{{ illust.title }}">{{ illust.title }}</div>
             <div class="illust-meta">
                 <span>{{ artists_map[illust.artist_id].name if illust.artist_id in artists_map else 'Unknown' }}</span>
-                <span>{{ illust.posted_at[:10] if illust.posted_at else '' }}</span>
+                <span>{{ illust.posted_at.strftime('%Y-%m-%d') if illust.posted_at else '' }}</span>
             </div>
             {% if illust.type == 'ugoira' %}<span class="badge">动图</span>{% endif %}
             {% if illust.page_count > 1 %}<span class="badge">{{ illust.page_count }}P</span>{% endif %}
