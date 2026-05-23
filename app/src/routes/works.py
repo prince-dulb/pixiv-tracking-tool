@@ -86,7 +86,9 @@ async def index(request: Request, artist_ids: str = Query(None), type: str = Que
 
 
 @router.get("/illust/{illust_id}")
-async def illust_detail(request: Request, illust_id: int):
+async def illust_detail(request: Request, illust_id: int,
+                         artist_ids: str = Query(None), artist_id: int = Query(None),
+                         type: str = Query(None)):
     session = Session()
     illust = session.query(Illustration).get(illust_id)
     if not illust:
@@ -103,12 +105,53 @@ async def illust_detail(request: Request, illust_id: int):
     except (json.JSONDecodeError, TypeError):
         tags = []
 
+    # 根据上下文构建查询，找到前/后作品
+    base_query = session.query(Illustration.id).order_by(Illustration.posted_at.desc())
+    if artist_id:
+        base_query = base_query.filter_by(artist_id=artist_id)
+    elif artist_ids:
+        try:
+            ids = {int(x.strip()) for x in artist_ids.split(",") if x.strip()}
+            if ids:
+                base_query = base_query.filter(Illustration.artist_id.in_(ids))
+        except (ValueError, TypeError):
+            pass
+    if type and type in TYPE_LABELS:
+        base_query = base_query.filter_by(type=type)
+
+    all_ids = [row[0] for row in base_query.all()]
+    try:
+        current_idx = all_ids.index(illust.id)
+    except ValueError:
+        current_idx = -1
+
+    prev_id = all_ids[current_idx - 1] if current_idx > 0 else None
+    next_id = all_ids[current_idx + 1] if current_idx >= 0 and current_idx < len(all_ids) - 1 else None
+
+    # 构建导航链接的查询参数
+    params = []
+    if artist_ids:
+        params.append(f"artist_ids={artist_ids}")
+    if artist_id:
+        params.append(f"artist_id={artist_id}")
+    if type:
+        params.append(f"type={type}")
+    nav_query = "?" + "&".join(params) if params else ""
+
+    if artist_id:
+        back_url = f"/artist/{artist_id}"
+    else:
+        back_url = "/" + nav_query
+
     session.close()
 
     return templates.TemplateResponse(
         request, "illust_detail.html",
         {"illust": illust, "artist": artist, "paths": paths,
-         "page_count": page_count, "tags": tags, "type_labels": TYPE_LABELS},
+         "page_count": page_count, "tags": tags, "type_labels": TYPE_LABELS,
+         "prev_id": prev_id, "next_id": next_id, "nav_query": nav_query,
+         "current_idx": current_idx + 1, "total_count": len(all_ids),
+         "back_url": back_url},
     )
 
 

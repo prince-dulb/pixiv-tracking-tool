@@ -1,8 +1,14 @@
 {% extends "base.html" %}
 {% block content %}
 
+<div class="detail-nav">
+    <a href="{{ back_url }}" class="back-link">&larr; 返回</a>
+    {% if total_count %}
+    <span class="nav-count">{{ current_idx }} / {{ total_count }}</span>
+    {% endif %}
+</div>
+
 <div class="detail-header">
-    <a href="/" class="back-link">&larr; 返回画廊</a>
     <div class="detail-title-row">
         <h2>{{ illust.title }}</h2>
         <span class="badge">{{ type_labels[illust.type] if illust.type in type_labels else illust.type }}</span>
@@ -11,8 +17,8 @@
     <div class="detail-meta">
         <span>画师：{{ artist.name if artist else 'Unknown' }} (@{{ artist.pixiv_account if artist else '' }})</span>
         <span>发布于 {{ illust.posted_at.strftime('%Y-%m-%d') if illust.posted_at else '' }}</span>
-        <span>♥ {{ illust.bookmark_count or 0 }}</span>
-        <span>👁 {{ illust.view_count or 0 }}</span>
+        <span>&hearts; {{ illust.bookmark_count or 0 }}</span>
+        <span>&#128065; {{ illust.view_count or 0 }}</span>
         {% if tags %}
         <div class="detail-tags">
             {% for tag in tags %}
@@ -25,15 +31,52 @@
 
 {% if paths %}
 <div class="page-viewer">
+    {% if prev_id or next_id %}
+    <div class="nav-arrows">
+        {% if prev_id %}
+        <a href="/illust/{{ prev_id }}{{ nav_query }}" class="nav-arrow nav-prev" title="上一张">&larr;</a>
+        {% else %}
+        <span class="nav-arrow nav-disabled">&larr;</span>
+        {% endif %}
+        <div class="page-content">
+            {% for path in paths %}
+            <div class="page-item">
+                <img src="{{ path }}" alt="{{ illust.title }} - p{{ loop.index0 }}" class="page-image">
+                <div class="page-num">{{ loop.index }} / {{ paths|length }}</div>
+            </div>
+            {% endfor %}
+        </div>
+        {% if next_id %}
+        <a href="/illust/{{ next_id }}{{ nav_query }}" class="nav-arrow nav-next" title="下一张">&rarr;</a>
+        {% else %}
+        <span class="nav-arrow nav-disabled">&rarr;</span>
+        {% endif %}
+    </div>
+    {% else %}
     {% for path in paths %}
     <div class="page-item">
         <img src="{{ path }}" alt="{{ illust.title }} - p{{ loop.index0 }}" class="page-image">
         <div class="page-num">{{ loop.index }} / {{ paths|length }}</div>
     </div>
     {% endfor %}
+    {% endif %}
 </div>
 {% else %}
 <div class="empty"><p>尚未下载</p></div>
+{% endif %}
+
+{% if prev_id or next_id %}
+<script>
+document.addEventListener('keydown', function(e) {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    {% if prev_id %}
+    if (e.key === 'ArrowLeft') { window.location.href = '/illust/{{ prev_id }}{{ nav_query }}'; }
+    {% endif %}
+    {% if next_id %}
+    if (e.key === 'ArrowRight') { window.location.href = '/illust/{{ next_id }}{{ nav_query }}'; }
+    {% endif %}
+});
+</script>
 {% endif %}
 
 {% endblock %}
