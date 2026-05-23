@@ -12,8 +12,29 @@ PIXIV_REFRESH_TOKEN = os.getenv("PIXIV_REFRESH_TOKEN", "")
 
 # Paths
 DATA_DIR = PROJECT_ROOT / os.getenv("DATA_DIR", "data")
-IMAGES_DIR = PROJECT_ROOT / os.getenv("IMAGES_DIR", "images")
+
+def _resolve_images_dir():
+    v = os.getenv("IMAGES_DIR", "images")
+    p = Path(v)
+    if p.is_absolute():
+        return p
+    return PROJECT_ROOT / p
+
+IMAGES_DIR = _resolve_images_dir()
 DATABASE_URL = f"sqlite:///{DATA_DIR / 'pixiv_tracker.db'}"
+
+
+def set_images_dir(new_path: str):
+    """修改图片存储路径并持久化到 .env。"""
+    import re
+    env_file = PROJECT_ROOT / ".env"
+    content = env_file.read_text() if env_file.exists() else ""
+    if "IMAGES_DIR=" in content:
+        content = re.sub(r'IMAGES_DIR=.*', f'IMAGES_DIR={new_path}', content)
+    else:
+        content += f'\nIMAGES_DIR={new_path}\n'
+    env_file.write_text(content)
+    os.environ["IMAGES_DIR"] = new_path
 
 # Server
 HOST = os.getenv("HOST", "0.0.0.0")

@@ -233,15 +233,30 @@ def _extract_code(user_input):
 
 
 def configure_gallery_dl(refresh_token):
+    from .config import IMAGES_DIR
     project_root = Path(__file__).parent.parent
-    gdl_config.set((), 'extractor', {
-        'pixiv': {
-            'refresh-token': refresh_token,
-            'directory': ['images', '{user[name]} {user[id]}'],
-            'archive': str(DATA_DIR / 'gallery_dl_archive.db'),
-        }
-    })
-    gdl_config.set((), 'base-directory', str(project_root))
+
+    # gallery-dl 路径：base-directory + directory 组成完整路径
+    images_dir = IMAGES_DIR
+    if images_dir.is_absolute():
+        gdl_config.set((), 'base-directory', str(images_dir))
+        gdl_config.set((), 'extractor', {
+            'pixiv': {
+                'refresh-token': refresh_token,
+                'directory': ['{user[name]} {user[id]}'],
+                'archive': str(DATA_DIR / 'gallery_dl_archive.db'),
+            }
+        })
+    else:
+        gdl_config.set((), 'base-directory', str(project_root))
+        gdl_config.set((), 'extractor', {
+            'pixiv': {
+                'refresh-token': refresh_token,
+                'directory': [str(images_dir.relative_to(project_root)), '{user[name]} {user[id]}'],
+                'archive': str(DATA_DIR / 'gallery_dl_archive.db'),
+            }
+        })
+
     gdl_config.set((), 'output', {
         'mode': 'auto',
         'skip': 'true',

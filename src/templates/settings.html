@@ -36,6 +36,15 @@
 </div>
 
 <div class="settings-section">
+    <h3>图片存储路径</h3>
+    <p>当前路径：<code>{{ images_dir }}</code></p>
+    <form method="post" action="/settings/change-path" class="add-form">
+        <input type="text" name="new_path" placeholder="输入新路径，如 D:/pixiv_images 或相对路径 my_images" value="{{ images_dir }}">
+        <button type="submit">修改路径</button>
+    </form>
+</div>
+
+<div class="settings-section">
     <h3>下载管理</h3>
     <p>下载所有尚未下载的作品。</p>
     <form method="post" action="/settings/download-pending">

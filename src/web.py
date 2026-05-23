@@ -53,11 +53,21 @@ async def lifespan(app: FastAPI):
     stop_scheduler()
 
 
+from fastapi.responses import FileResponse
+
 app = FastAPI(title="Pixiv Tracking Tool", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=str(PROJECT_ROOT / "static")), name="static")
 
-# 挂载图片目录用于浏览器访问
-app.mount("/images", StaticFiles(directory=str(PROJECT_ROOT / "images")), name="images")
+
+# 动态服务图片文件（支持自定义路径）
+@app.get("/images/{path:path}")
+async def serve_image(path: str):
+    from .config import IMAGES_DIR
+    file_path = IMAGES_DIR / path
+    if file_path.exists() and file_path.is_file():
+        return FileResponse(str(file_path))
+    from starlette.responses import Response
+    return Response(status_code=404)
 
 
 def main():
