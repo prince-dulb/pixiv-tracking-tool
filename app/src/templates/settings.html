@@ -41,9 +41,8 @@
     <p style="color:#888;font-size:13px;">目录内部结构：<code>data/</code>（数据库） + <code>images/</code>（作品图片）</p>
     <p style="color:var(--accent);font-size:13px;">注意：修改路径后需重启程序才能完全生效。</p>
     <form method="post" action="/settings/change-path" class="add-form" id="change-path-form">
-        <input type="text" name="new_path" id="new_path" placeholder="输入新路径，如 D:/pixiv_data" value="{{ data_root }}">
-        <button type="button" id="browse-btn">浏览...</button>
-        <button type="submit" id="apply-btn">修改路径</button>
+        <input type="text" name="new_path" id="new_path" placeholder="输入路径或点击右侧按钮选择" value="{{ data_root }}">
+        <button type="button" id="browse-btn">选择目录...</button>
     </form>
 </div>
 
@@ -61,7 +60,7 @@ document.getElementById('browse-btn').addEventListener('click', async () => {
         }
     } catch (e) {
         console.error(e);
-        btn.textContent = '浏览...';
+        btn.textContent = '选择目录...';
         btn.disabled = false;
     }
 });
