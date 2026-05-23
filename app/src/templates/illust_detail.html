@@ -31,49 +31,36 @@
 
 {% if paths %}
 <div class="page-viewer">
-    {% if prev_id or next_id %}
-    <div class="nav-arrows nav-arrows-top">
-        {% if prev_id %}
-        <a href="/illust/{{ prev_id }}{{ nav_query }}" class="nav-arrow nav-prev" title="上一张 (&larr;)">&larr;</a>
-        {% else %}
-        <span class="nav-arrow nav-disabled">&larr;</span>
-        {% endif %}
-        <div class="page-content">
-            {% for path in paths %}
-            <div class="page-item">
-                <img src="{{ path }}" alt="{{ illust.title }} - p{{ loop.index0 }}" class="page-image">
-                <div class="page-num">{{ loop.index }} / {{ paths|length }}</div>
-            </div>
-            {% endfor %}
-        </div>
-        {% if next_id %}
-        <a href="/illust/{{ next_id }}{{ nav_query }}" class="nav-arrow nav-next" title="下一张 (&rarr;)">&rarr;</a>
-        {% else %}
-        <span class="nav-arrow nav-disabled">&rarr;</span>
-        {% endif %}
-    </div>
-    <div class="nav-arrows nav-arrows-bottom">
-        {% if prev_id %}
-        <a href="/illust/{{ prev_id }}{{ nav_query }}" class="nav-arrow nav-prev">&larr;</a>
-        {% else %}
-        <span class="nav-arrow nav-disabled">&larr;</span>
-        {% endif %}
-        <span class="nav-count-bottom">{{ current_idx }} / {{ total_count }}</span>
-        {% if next_id %}
-        <a href="/illust/{{ next_id }}{{ nav_query }}" class="nav-arrow nav-next">&rarr;</a>
-        {% else %}
-        <span class="nav-arrow nav-disabled">&rarr;</span>
-        {% endif %}
-    </div>
-    {% else %}
     {% for path in paths %}
     <div class="page-item">
         <img src="{{ path }}" alt="{{ illust.title }} - p{{ loop.index0 }}" class="page-image">
         <div class="page-num">{{ loop.index }} / {{ paths|length }}</div>
     </div>
     {% endfor %}
+</div>
+
+{% if prev_id or next_id %}
+<div class="nav-arrows nav-arrows-bottom">
+    {% if prev_id %}
+    <a href="/illust/{{ prev_id }}{{ nav_query }}" class="nav-arrow nav-prev">&larr;</a>
+    {% else %}
+    <span class="nav-arrow nav-disabled">&larr;</span>
+    {% endif %}
+    <span class="nav-count-bottom">{{ current_idx }} / {{ total_count }}</span>
+    {% if next_id %}
+    <a href="/illust/{{ next_id }}{{ nav_query }}" class="nav-arrow nav-next">&rarr;</a>
+    {% else %}
+    <span class="nav-arrow nav-disabled">&rarr;</span>
     {% endif %}
 </div>
+
+{% if prev_id %}
+<a href="/illust/{{ prev_id }}{{ nav_query }}" class="side-arrow side-prev" title="上一张">&larr;</a>
+{% endif %}
+{% if next_id %}
+<a href="/illust/{{ next_id }}{{ nav_query }}" class="side-arrow side-next" title="下一张">&rarr;</a>
+{% endif %}
+{% endif %}
 {% else %}
 <div class="empty"><p>尚未下载</p></div>
 {% endif %}
