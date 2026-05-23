@@ -89,27 +89,10 @@ def _oauth_pkce():
     print("\n" + "=" * 55)
     print("  Pixiv 需要浏览器授权登录")
     print("=" * 55)
-    print(f"""
-1. 浏览器会打开 Pixiv 登录页面，正常登录你的 Pixiv 账号
+    print("\n  浏览器即将打开，请在浏览器中登录你的 Pixiv 账号。")
+    print("  登录成功后会自动捕获授权码，无需手动操作。\n")
 
-2. 登录成功后，页面会快速跳转几次，最终停在一个空白页。
-   现在打开浏览器的历史记录（Ctrl+H），搜索 "callback"
-
-3. 历史记录中会有一条包含 "callback?state=..." 的网址，
-   点击它，浏览器地址栏会显示类似：
-   https://app-api.pixiv.net/.../callback?state=...&code=XXXXXXXX
-
-4. 复制地址栏中这一整条 URL，粘贴到下方
-""")
-
-    try:
-        webbrowser.open(login_url)
-    except Exception:
-        pass
-
-    user_input = input("  >> 粘贴 callback URL: ").strip()
-
-    code = _extract_code(user_input)
+    code = _browser_oauth(login_url)
     if not code:
         return None
 
@@ -149,6 +132,59 @@ def _oauth_pkce():
     _save_token(resp["access_token"], resp["refresh_token"])
     print("\n[OK] 登录成功！\n")
     return resp["refresh_token"]
+
+
+def _browser_oauth(login_url):
+    """用 Playwright 打开浏览器，自动截获回调请求中的 code。"""
+    from playwright.sync_api import sync_playwright
+
+    code = None
+
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=False)
+            page = browser.new_page()
+
+            # 拦截所有请求，包括 XHR fetch
+            def on_request(request):
+                nonlocal code
+                if code:
+                    return
+                url = request.url
+                if "callback" in url and "code=" in url:
+                    code = _extract_code(url)
+
+            page.on("request", on_request)
+
+            # 同时监听页面导航（callback 也可能是页面跳转）
+            def on_navigate(frame):
+                nonlocal code
+                if code:
+                    return
+                url = frame.url
+                if "callback" in url and "code=" in url:
+                    code = _extract_code(url)
+
+            page.on("framenavigated", on_navigate)
+
+            page.goto(login_url)
+            print("  (等待登录完成，请不要关闭浏览器窗口。最长等待 3 分钟)\n")
+
+            # 轮询等待，每 2 秒检查一次
+            elapsed = 0
+            while not code and elapsed < 180:
+                page.wait_for_timeout(2000)
+                elapsed += 2
+
+            browser.close()
+
+    except Exception as e:
+        print(f"\n  [!] 浏览器流程出错: {e}\n")
+
+    if not code:
+        print("\n[X] 未能捕获授权码。请确认在浏览器中完成了登录。\n")
+
+    return code
 
 
 def _extract_code(user_input):
