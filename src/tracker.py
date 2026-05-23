@@ -126,17 +126,19 @@ class Tracker:
         return count
 
     def _fetch_new_illusts(self, session, artist):
+        """检查并保存画师的新作品。全量拉取后比对，不依赖 API 返回顺序。"""
+        existing_ids = {
+            row[0]
+            for row in session.query(Illustration.pixiv_illust_id)
+            .filter_by(artist_id=artist.id)
+            .all()
+        }
+
         count = 0
         for illust_data in self.client.get_all_artist_illusts(artist.pixiv_user_id):
-            exists = (
-                session.query(Illustration)
-                .filter_by(pixiv_illust_id=illust_data["illust_id"])
-                .first()
-            )
-            if exists:
-                break
-            self._save_illust(session, artist, illust_data)
-            count += 1
+            if illust_data["illust_id"] not in existing_ids:
+                self._save_illust(session, artist, illust_data)
+                count += 1
         return count
 
     def _save_illust(self, session, artist, illust_data):
