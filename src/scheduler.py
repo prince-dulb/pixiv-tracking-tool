@@ -9,11 +9,7 @@ _scheduler: BackgroundScheduler = None
 def check_and_download(tracker):
     """定时任务：检查更新并下载新作品。"""
     try:
-        results = tracker.check_updates()
-        if any(results.values()):
-            session = Session()
-            tracker.downloader.download_pending(session)
-            session.close()
+        tracker.check_updates()
     except Exception:
         pass  # 定时任务静默处理错误，避免影响主进程
 
