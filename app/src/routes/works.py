@@ -143,6 +143,32 @@ async def illust_detail(request: Request, illust_id: int,
     else:
         back_url = "/" + nav_query
 
+    # 为详情页筛选栏准备数据
+    all_artists = session.query(TrackedArtist).filter_by(is_active=True).order_by(TrackedArtist.name).all()
+    selected_ids = set()
+    if artist_id:
+        selected_ids = {artist_id}
+    elif artist_ids:
+        try:
+            selected_ids = {int(x.strip()) for x in artist_ids.split(",") if x.strip()}
+        except (ValueError, TypeError):
+            pass
+
+    detail_toggle_urls = {}
+    for a in all_artists:
+        detail_toggle_urls[a.id] = _toggle_url(a.id, selected_ids, type)
+
+    detail_type_urls = {}
+    for t in TYPE_LABELS:
+        params = []
+        if selected_ids:
+            params.append(f"artist_ids={_ids_str(selected_ids)}")
+        if t != type or not type:
+            params.append(f"type={t}")
+        else:
+            params = [f"artist_ids={_ids_str(selected_ids)}"] if selected_ids else []
+        detail_type_urls[t] = "/?" + "&".join(params) if params else "/"
+
     session.close()
 
     return templates.TemplateResponse(
@@ -151,7 +177,10 @@ async def illust_detail(request: Request, illust_id: int,
          "page_count": page_count, "tags": tags, "type_labels": TYPE_LABELS,
          "prev_id": prev_id, "next_id": next_id, "nav_query": nav_query,
          "current_idx": current_idx + 1, "total_count": len(all_ids),
-         "back_url": back_url},
+         "back_url": back_url,
+         "all_artists": all_artists, "selected_artist_ids": selected_ids,
+         "detail_toggle_urls": detail_toggle_urls, "detail_type_urls": detail_type_urls,
+         "current_type": type},
     )
 
 
