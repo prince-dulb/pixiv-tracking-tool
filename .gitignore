@@ -9,3 +9,4 @@ dist/
 *.spec.bak
 test_images
 test_images/
+.superpowers/
