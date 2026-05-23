@@ -1,13 +1,13 @@
 # -*- mode: python ; coding: utf-8 -*-
 
 a = Analysis(
-    ['app/run.py'],
+    ['run.py'],
     pathex=[],
     binaries=[],
     datas=[
-        ('app/src/templates', 'src/templates'),
-        ('app/static', 'static'),
-        ('app/.env.example', '.'),
+        ('src/templates', 'src/templates'),
+        ('static', 'static'),
+        ('.env.example', '.'),
     ],
     hiddenimports=[
         'jinja2.ext',
@@ -32,7 +32,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='PixivTracker_v0.0.2',
+    name='PixivTracker_v0.0.3',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
