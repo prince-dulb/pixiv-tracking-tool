@@ -144,8 +144,8 @@ class Tracker:
         try:
             job = gdl_job.DownloadJob(url)
             job.run()
-        except Exception:
-            pass  # gallery-dl 内部处理大部分错误
+        except Exception as e:
+            print(f"  [!] 下载出错 ({user_id}): {e}")
 
     def _update_file_paths(self, session, artist):
         """扫描下载目录，为 DB 中没有 file_paths 的作品匹配本地文件。"""
