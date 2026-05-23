@@ -16,9 +16,8 @@ from .models import Session, TrackedArtist, Illustration
 
 
 def _artist_dir_name(artist):
-    """画师对应的文件目录名：{account} {user_id}"""
-    account = artist.pixiv_account or artist.pixiv_user_id
-    return f"{account} {artist.pixiv_user_id}"
+    """画师对应的文件目录名：{name} {user_id}"""
+    return f"{artist.name} {artist.pixiv_user_id}"
 
 
 def _parse_iso_date(s):
