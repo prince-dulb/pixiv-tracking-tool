@@ -62,7 +62,15 @@ body {
 .alert-warn { background: #3a2e15; color: #f4c771; border: 1px solid #5a4525; }
 
 /* 工具栏 */
-.toolbar { margin-bottom: 16px; }
+.toolbar {
+    margin-bottom: 16px;
+    position: sticky;
+    top: 48px;
+    z-index: 99;
+    background: var(--bg);
+    padding-top: 4px;
+    padding-bottom: 8px;
+}
 .toolbar-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .filter-bar {
     display: flex;
