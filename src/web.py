@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
@@ -31,7 +32,8 @@ async def lifespan(app: FastAPI):
     init_db()
 
     try:
-        auth()
+        # auth() 内部使用 Playwright sync API，必须在独立线程运行
+        await asyncio.to_thread(auth)
         tracker = Tracker()
         start_scheduler(tracker)
     except Exception as e:

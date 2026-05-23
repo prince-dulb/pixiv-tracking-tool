@@ -139,44 +139,47 @@ def _browser_oauth(login_url):
     from playwright.sync_api import sync_playwright
 
     code = None
+    browser_closed = False
 
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=False)
             page = browser.new_page()
 
-            # 拦截所有请求，包括 XHR fetch
             def on_request(request):
                 nonlocal code
                 if code:
                     return
                 url = request.url
                 if "callback" in url and "code=" in url:
-                    code = _extract_code(url)
+                    extracted = _extract_code(url)
+                    if extracted:
+                        code = extracted
+
+            def set_browser_closed():
+                nonlocal browser_closed
+                browser_closed = True
 
             page.on("request", on_request)
-
-            # 同时监听页面导航（callback 也可能是页面跳转）
-            def on_navigate(frame):
-                nonlocal code
-                if code:
-                    return
-                url = frame.url
-                if "callback" in url and "code=" in url:
-                    code = _extract_code(url)
-
-            page.on("framenavigated", on_navigate)
+            page.on("close", set_browser_closed)
 
             page.goto(login_url)
-            print("  (等待登录完成，请不要关闭浏览器窗口。最长等待 3 分钟)\n")
+            print("  (等待登录完成，不要关闭浏览器窗口。最长等待 3 分钟)\n")
 
-            # 轮询等待，每 2 秒检查一次
             elapsed = 0
-            while not code and elapsed < 180:
-                page.wait_for_timeout(2000)
-                elapsed += 2
+            while not code and not browser_closed and elapsed < 180:
+                # 同时检查当前页面 URL（以防 request 事件没捕获到）
+                url = page.url
+                if "callback" in url and "code=" in url:
+                    extracted = _extract_code(url)
+                    if extracted:
+                        code = extracted
+                        break
+                page.wait_for_timeout(1000)
+                elapsed += 1
 
-            browser.close()
+            if not browser_closed:
+                browser.close()
 
     except Exception as e:
         print(f"\n  [!] 浏览器流程出错: {e}\n")
