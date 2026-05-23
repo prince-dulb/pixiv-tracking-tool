@@ -237,7 +237,7 @@ def configure_gallery_dl(refresh_token):
     gdl_config.set((), 'extractor', {
         'pixiv': {
             'refresh-token': refresh_token,
-            'directory': ['images', '{user[id]}'],
+            'directory': ['images', '{user[account]} {user[id]}'],
             'archive': str(DATA_DIR / 'gallery_dl_archive.db'),
         }
     })

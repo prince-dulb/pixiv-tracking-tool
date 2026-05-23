@@ -15,6 +15,12 @@ from .config import IMAGES_DIR, DATA_DIR
 from .models import Session, TrackedArtist, Illustration
 
 
+def _artist_dir_name(artist):
+    """画师对应的文件目录名：{account} {user_id}"""
+    account = artist.pixiv_account or artist.pixiv_user_id
+    return f"{account} {artist.pixiv_user_id}"
+
+
 def _parse_iso_date(s):
     """将 Pixiv API 返回的 ISO 8601 日期字符串转为 datetime。"""
     try:
@@ -178,7 +184,8 @@ class Tracker:
         """将画师目录下已下载的 ugoira ZIP 转换为 GIF。"""
         import zipfile
         from PIL import Image
-        artist_dir = IMAGES_DIR / artist.pixiv_user_id
+        dir_name = _artist_dir_name(artist)
+        artist_dir = IMAGES_DIR / dir_name
         if not artist_dir.exists():
             return
 
@@ -189,7 +196,11 @@ class Tracker:
         )
 
         for illust in ugoira_illusts:
-            zip_path = artist_dir / f"{illust.pixiv_illust_id}_ugoira.zip"
+            # gallery-dl 下载的 ugoira 格式：{id}_p0.zip
+            zip_path = artist_dir / f"{illust.pixiv_illust_id}_p0.zip"
+            if not zip_path.exists():
+                # 也尝试旧格式
+                zip_path = artist_dir / f"{illust.pixiv_illust_id}_ugoira.zip"
             gif_path = artist_dir / f"{illust.pixiv_illust_id}.gif"
             if not zip_path.exists() or gif_path.exists():
                 continue
@@ -232,7 +243,7 @@ class Tracker:
                     frames_data[0].save(gif_path, **kwargs)
 
                 # 更新文件路径指向 GIF
-                web_prefix = f"/images/{artist.pixiv_user_id}"
+                web_prefix = f"/images/{dir_name}"
                 illust.file_paths = f"{web_prefix}/{gif_path.name}"
                 zip_path.unlink()  # 删除原始 ZIP
 
@@ -241,8 +252,9 @@ class Tracker:
 
     def _update_file_paths(self, session, artist):
         """扫描下载目录，检查并更新所有作品的本地文件路径。缺失的标记为待下载。"""
-        artist_dir = IMAGES_DIR / artist.pixiv_user_id
-        web_prefix = f"/images/{artist.pixiv_user_id}"
+        dir_name = _artist_dir_name(artist)
+        artist_dir = IMAGES_DIR / dir_name
+        web_prefix = f"/images/{dir_name}"
 
         all_illusts = (
             session.query(Illustration)
