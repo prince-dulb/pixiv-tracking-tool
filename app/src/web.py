@@ -76,24 +76,27 @@ async def api_status():
     })
 
 
-@app.post("/api/restart")
-async def api_restart():
-    import os
-    import sys
-    import subprocess
-    import time
-    import threading
+@app.post("/api/reload")
+async def api_reload():
+    """原地重载：重启数据库引擎和 tracker，用于数据目录迁移后。"""
+    global tracker
     from fastapi.responses import JSONResponse
 
-    def _restart():
-        time.sleep(0.5)
-        exe = sys.executable
-        cwd = os.path.dirname(exe)
-        subprocess.Popen([exe], cwd=cwd,
-                         creationflags=subprocess.CREATE_NEW_CONSOLE if sys.platform == 'win32' else 0)
-        os._exit(0)
+    stop_scheduler()
+    if tracker:
+        tracker = None
 
-    threading.Thread(target=_restart, daemon=True).start()
+    from .models import reinit_db
+    reinit_db()
+
+    try:
+        tracker = Tracker()
+        start_scheduler(tracker)
+        templates.env.globals["pixiv_logged_in"] = True
+    except Exception as e:
+        templates.env.globals["pixiv_logged_in"] = False
+        return JSONResponse({"ok": False, "error": str(e)})
+
     return JSONResponse({"ok": True})
 
 

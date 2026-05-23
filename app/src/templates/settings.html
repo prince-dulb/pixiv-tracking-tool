@@ -59,18 +59,16 @@ async function applyPath(path) {
         const resp = await fetch('/settings/change-path', { method: 'POST', body: fd });
         const data = await resp.json();
         if (data.ok) {
-            msg.textContent = '路径已修改，正在重启服务...';
+            msg.textContent = '路径已修改，正在重载服务...';
             msg.style.display = 'block';
-            await fetch('/api/restart', { method: 'POST' });
-            // 轮询等待服务恢复
-            for (let i = 0; i < 30; i++) {
-                await new Promise(r => setTimeout(r, 1000));
-                try {
-                    const r = await fetch('/api/status');
-                    if (r.ok) { location.reload(); return; }
-                } catch(e) {}
+            const resp = await fetch('/api/reload', { method: 'POST' });
+            const rld = await resp.json();
+            if (rld.ok) {
+                msg.textContent = '路径修改完成，服务已重载。';
+                setTimeout(() => location.reload(), 500);
+            } else {
+                msg.textContent = '重载失败: ' + (rld.error || '未知错误') + '。请手动重启程序。';
             }
-            location.reload();
         } else {
             msg.textContent = '错误: ' + (data.error || '操作失败');
             msg.style.display = 'block';

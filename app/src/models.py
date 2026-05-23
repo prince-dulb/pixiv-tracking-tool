@@ -52,3 +52,14 @@ class Illustration(Base):
 
 def init_db():
     Base.metadata.create_all(engine)
+
+
+def reinit_db():
+    """重新初始化数据库连接（数据目录迁移后调用）。"""
+    global engine, Session
+    engine.dispose()
+    from .config import DATABASE_URL, DATA_DIR
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    engine = create_engine(DATABASE_URL, echo=False)
+    Session = sessionmaker(bind=engine)
+    Base.metadata.create_all(engine)
