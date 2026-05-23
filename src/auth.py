@@ -90,19 +90,16 @@ def _oauth_pkce():
     print("  Pixiv 需要浏览器授权登录")
     print("=" * 55)
     print(f"""
-1. 浏览器会打开 Pixiv 登录页面（如未自动打开，复制上面的链接）
+1. 浏览器会打开 Pixiv 登录页面，正常登录你的 Pixiv 账号
 
-2. 在登录页面按 F12，点击顶部 "Network"（网络）标签页
-   在 Network 标签页顶部的过滤框里输入: callback
-   （这样只会显示 callback 相关的请求，方便查找）
+2. 登录成功后，页面会快速跳转几次，最终停在一个空白页。
+   现在打开浏览器的历史记录（Ctrl+H），搜索 "callback"
 
-3. 正常登录你的 Pixiv 账号
+3. 历史记录中会有一条包含 "callback?state=..." 的网址，
+   点击它，浏览器地址栏会显示类似：
+   https://app-api.pixiv.net/.../callback?state=...&code=XXXXXXXX
 
-4. 登录成功后，Network 标签页里会出现一条 "callback?state=..."
-   的请求。点击它，右侧会显示该请求的详情。
-
-5. 在右侧找到 "Query String Parameters"（查询字符串参数），
-   复制 code 那一行的值（一长串字符，不是 code_challenge）
+4. 复制地址栏中这一整条 URL，粘贴到下方
 """)
 
     try:
@@ -110,7 +107,7 @@ def _oauth_pkce():
     except Exception:
         pass
 
-    user_input = input("  >> 粘贴 code: ").strip()
+    user_input = input("  >> 粘贴 callback URL: ").strip()
 
     code = _extract_code(user_input)
     if not code:
@@ -184,10 +181,8 @@ def _extract_code(user_input):
     # 没有 code 参数——分析用户错误粘贴了什么
     if "accounts.pixiv.net" in user_input or "code_challenge" in user_input:
         print("\n  [!] 这是登录跳转过程中的 URL，里面没有 code 参数。")
-        print("  你需要从 Network 标签页的 callback 请求中获取 code：")
-        print("  1. 在 Network 过滤框输入 callback 缩小范围")
-        print("  2. 找到 callback?state=... 这条请求")
-        print("  3. 点击后在右侧 Query String Parameters 里复制 code 的值\n")
+        print("  请按 Ctrl+H 打开浏览器历史记录，搜索 'callback'")
+        print("  找到 callback?state=...&code=... 那条记录，复制整条 URL\n")
         return None
 
     # URL 里有 code= 但 parse_qs 没提取到（可能是嵌套 URL），兜底提取
