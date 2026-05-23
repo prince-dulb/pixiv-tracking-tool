@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="artist-header">
+    <img src="{{ artist.avatar_url }}" alt="{{ artist.name }}" class="artist-avatar-lg" onerror="this.style.display='none'">
+    <div>
+        <h2>{{ artist.name }}</h2>
+        <p>@{{ artist.pixiv_account or 'unknown' }} · {{ illustrations|length }} 件作品</p>
+        <a href="https://www.pixiv.net/users/{{ artist.pixiv_user_id }}" target="_blank" class="ext-link">在 Pixiv 打开 →</a>
+    </div>
+</div>
+
+{% if illustrations %}
+<div class="gallery">
+    {% for illust in illustrations %}
+    <div class="illust-card">
+        <a href="{{ illust.file_paths.split(',')[0] if illust.file_paths else '#' }}" target="_blank">
+            <img src="{{ illust.file_paths.split(',')[0] if illust.file_paths else '/static/placeholder.svg' }}"
+                 alt="{{ illust.title }}"
+                 loading="lazy"
+                 class="illust-thumb"
+                 onerror="this.src='/static/placeholder.svg'">
+        </a>
+        <div class="illust-info">
+            <div class="illust-title" title="{{ illust.title }}">{{ illust.title }}</div>
+            <div class="illust-meta">
+                <span>{{ illust.posted_at[:10] if illust.posted_at else '' }}</span>
+                <span>♥ {{ illust.bookmark_count or 0 }}</span>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="empty">
+    <p>还没有下载作品。</p>
+</div>
+{% endif %}
+
+{% endblock %}

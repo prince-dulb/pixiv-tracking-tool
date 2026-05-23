@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="toolbar">
+    <div class="filter-bar">
+        <span>画师筛选：</span>
+        <a href="/" class="filter-tag {% if not current_artist %}active{% endif %}">全部</a>
+        {% for a in artists %}
+        <a href="/?artist_id={{ a.id }}" class="filter-tag {% if current_artist and current_artist.id == a.id %}active{% endif %}">{{ a.name }}</a>
+        {% endfor %}
+    </div>
+</div>
+
+{% if illustrations %}
+<div class="gallery">
+    {% for illust in illustrations %}
+    <div class="illust-card">
+        <a href="{{ illust.file_paths.split(',')[0] if illust.file_paths else '#' }}" target="_blank">
+            <img src="{{ illust.file_paths.split(',')[0] if illust.file_paths else '/static/placeholder.svg' }}"
+                 alt="{{ illust.title }}"
+                 loading="lazy"
+                 class="illust-thumb"
+                 onerror="this.src='/static/placeholder.svg'">
+        </a>
+        <div class="illust-info">
+            <div class="illust-title" title="{{ illust.title }}">{{ illust.title }}</div>
+            <div class="illust-meta">
+                <span>{{ artists_map[illust.artist_id].name if illust.artist_id in artists_map else 'Unknown' }}</span>
+                <span>{{ illust.posted_at[:10] if illust.posted_at else '' }}</span>
+            </div>
+            {% if illust.type == 'ugoira' %}<span class="badge">动图</span>{% endif %}
+            {% if illust.page_count > 1 %}<span class="badge">{{ illust.page_count }}P</span>{% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="empty">
+    <p>还没有作品。</p>
+    <p>先去<a href="/artists">画师管理</a>添加特别关注的画师。</p>
+</div>
+{% endif %}
+
+{% endblock %}

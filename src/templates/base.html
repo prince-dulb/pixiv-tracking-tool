@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pixiv Tracker</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <a href="/" class="brand">Pixiv Tracker</a>
+        <div class="nav-links">
+            <a href="/">作品</a>
+            <a href="/artists">画师</a>
+            <a href="/settings">设置</a>
+        </div>
+    </nav>
+    <main class="container">
+        {% if not pixiv_logged_in %}
+        <div class="alert alert-warn">未登录 Pixiv。请配置 .env 中的 PIXIV_USERNAME 和 PIXIV_PASSWORD，然后重启服务。</div>
+        {% endif %}
+        {% if error %}
+        <div class="alert alert-error">{{ error }}</div>
+        {% endif %}
+        {% block content %}{% endblock %}
+    </main>
+</body>
+</html>

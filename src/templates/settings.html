@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h2>设置</h2>
+
+<div class="settings-grid">
+    <div class="stat-card">
+        <div class="stat-number">{{ artist_count }}</div>
+        <div class="stat-label">特别关注画师</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-number">{{ illust_count }}</div>
+        <div class="stat-label">已记录作品</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-number">{{ downloaded }}</div>
+        <div class="stat-label">已下载</div>
+    </div>
+</div>
+
+<div class="settings-section">
+    <h3>定时检查</h3>
+    <p>
+        每
+        {% if check_interval_hours %}
+        {{ check_interval_hours }} 小时
+        {% endif %}
+        {% if check_interval_minutes %}
+        {{ check_interval_minutes }} 分钟
+        {% endif %}
+        自动检查画师更新。
+    </p>
+    <form method="post" action="/settings/check-now">
+        <button type="submit">立即检查更新</button>
+    </form>
+</div>
+
+<div class="settings-section">
+    <h3>下载管理</h3>
+    <p>下载所有尚未下载的作品。</p>
+    <form method="post" action="/settings/download-pending">
+        <button type="submit">下载全部待下载作品</button>
+    </form>
+</div>
+
+<div class="settings-section">
+    <h3>访问地址</h3>
+    <p>服务运行在端口 {{ port }}。同一网络下的设备可通过以下地址访问：</p>
+    <code>http://&lt;本机IP&gt;:{{ port }}</code>
+</div>
+
+{% endblock %}
