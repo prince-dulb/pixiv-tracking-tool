@@ -3,11 +3,20 @@ import sys
 from pathlib import Path
 from dotenv import load_dotenv
 
-# PyInstaller 打包后 __file__ 不可用，用 sys._MEIPASS 或可执行文件目录
+# PyInstaller 打包后资源在 _MEIPASS 临时目录，数据在可执行文件目录
 if getattr(sys, 'frozen', False):
-    PROJECT_ROOT = Path(sys.executable).parent
+    BUNDLE_DIR = Path(sys._MEIPASS)  # 静态资源临时解压目录
+    PROJECT_ROOT = Path(sys.executable).parent  # 用户数据目录（data/, images/, .env）
 else:
+    BUNDLE_DIR = None
     PROJECT_ROOT = Path(__file__).parent.parent
+
+
+def resource_path(relative_path):
+    """获取资源文件路径，兼容 PyInstaller 打包。"""
+    if BUNDLE_DIR:
+        return str(BUNDLE_DIR / relative_path)
+    return str(PROJECT_ROOT / relative_path)
 
 load_dotenv(PROJECT_ROOT / ".env")
 

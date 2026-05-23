@@ -4,14 +4,14 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from .config import HOST, PORT, PROJECT_ROOT
+from .config import HOST, PORT, PROJECT_ROOT, resource_path
 from .models import init_db
 from .auth import auth
 from .client import PixivClient
 from .tracker import Tracker
 from .scheduler import start_scheduler, stop_scheduler
 
-templates = Jinja2Templates(directory=str(PROJECT_ROOT / "src" / "templates"))
+templates = Jinja2Templates(directory=resource_path("src/templates"))
 
 # 全局实例，在 startup 时初始化
 tracker: Tracker = None
@@ -56,7 +56,7 @@ async def lifespan(app: FastAPI):
 from fastapi.responses import FileResponse
 
 app = FastAPI(title="Pixiv Tracking Tool", lifespan=lifespan)
-app.mount("/static", StaticFiles(directory=str(PROJECT_ROOT / "static")), name="static")
+app.mount("/static", StaticFiles(directory=resource_path("static")), name="static")
 
 
 # 动态服务图片文件（支持自定义路径）
@@ -72,7 +72,11 @@ async def serve_image(path: str):
 
 def main():
     import uvicorn
-    uvicorn.run("src.web:app", host=HOST, port=PORT, reload=True)
+    import sys
+    # PyInstaller 打包后不能用 reload 模式
+    reload = not getattr(sys, 'frozen', False)
+    uvicorn.run("src.web:app" if not getattr(sys, 'frozen', False) else app,
+                host=HOST, port=PORT, reload=reload)
 
 
 if __name__ == "__main__":
