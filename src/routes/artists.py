@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Request, Form, Query
 from fastapi.responses import RedirectResponse
 
-from ..models import Session, TrackedArtist
+from ..models import Session, TrackedArtist, Illustration
 from ..web import get_tracker, get_client, templates
 
 router = APIRouter(prefix="/artists", tags=["artists"])
@@ -11,6 +11,8 @@ router = APIRouter(prefix="/artists", tags=["artists"])
 async def list_artists(request: Request, search: str = Query(None)):
     session = Session()
     artists = session.query(TrackedArtist).order_by(TrackedArtist.added_at.desc()).all()
+    # 预计算作品数，避免模板中触发 lazy load
+    artist_counts = {a.id: session.query(Illustration).filter_by(artist_id=a.id).count() for a in artists}
 
     results = []
     if search:
@@ -21,14 +23,20 @@ async def list_artists(request: Request, search: str = Query(None)):
             session.close()
             return templates.TemplateResponse(
                 request, "artists.html",
-                {"artists": artists, "results": [], "error": "未登录 Pixiv，无法搜索"}
+                {"artists": artists, "artist_counts": artist_counts, "results": [], "error": "未登录 Pixiv，无法搜索"}
             )
 
     session.close()
     return templates.TemplateResponse(
         request, "artists.html",
-        {"artists": artists, "results": results, "search_term": search or ""}
+        {"artists": artists, "artist_counts": artist_counts, "results": results, "search_term": search or ""}
     )
+
+
+def _artists_context(session):
+    artists = session.query(TrackedArtist).order_by(TrackedArtist.added_at.desc()).all()
+    counts = {a.id: session.query(Illustration).filter_by(artist_id=a.id).count() for a in artists}
+    return artists, counts
 
 
 @router.post("/add")
@@ -38,22 +46,22 @@ async def add_artist(request: Request, user_id: str = Form(...)):
 
     if not client or not tracker:
         session = Session()
-        artists = session.query(TrackedArtist).order_by(TrackedArtist.added_at.desc()).all()
+        artists, counts = _artists_context(session)
         session.close()
         return templates.TemplateResponse(
             request, "artists.html",
-            {"artists": artists, "results": [], "error": "未登录 Pixiv，无法添加画师"}
+            {"artists": artists, "artist_counts": counts, "results": [], "error": "未登录 Pixiv，无法添加画师"}
         )
 
     artist, created = tracker.add_artist(user_id)
     session = Session()
-    artists = session.query(TrackedArtist).order_by(TrackedArtist.added_at.desc()).all()
+    artists, counts = _artists_context(session)
     session.close()
 
     if not created:
         return templates.TemplateResponse(
             request, "artists.html",
-            {"artists": artists, "results": [], "error": f"画师 {artist.name} 已在特别关注列表中"}
+            {"artists": artists, "artist_counts": counts, "results": [], "error": f"画师 {artist.name} 已在特别关注列表中"}
         )
 
     return RedirectResponse("/artists", status_code=303)

@@ -40,7 +40,7 @@
         <img src="{{ artist.avatar_url }}" alt="{{ artist.name }}" class="artist-avatar" onerror="this.style.display='none'">
         <div class="artist-info">
             <div class="artist-name">{{ artist.name }}</div>
-            <div class="artist-account">@{{ artist.pixiv_account or 'unknown' }} · {{ artist.illustrations|length }} 件作品</div>
+            <div class="artist-account">@{{ artist.pixiv_account or 'unknown' }} · {{ artist_counts.get(artist.id, 0) }} 件作品</div>
             <div class="artist-meta">
                 <span>添加于 {{ artist.added_at.strftime('%Y-%m-%d') if artist.added_at else '' }}</span>
                 {% if artist.last_checked_at %}
