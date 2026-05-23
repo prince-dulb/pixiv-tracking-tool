@@ -21,20 +21,15 @@ def resource_path(relative_path):
 env_file = PROJECT_ROOT / ".env"
 if not env_file.exists():
     env_file.write_text("""\
-# Pixiv Tracking Tool 配置
-# 首次启动会引导浏览器授权登录，无需手动填写
+# Pixiv Tracking Tool configuration
+# First run will guide you through browser OAuth login
 
-# 服务端口
 HOST=0.0.0.0
 PORT=8000
-
-# 图片存储路径（相对或绝对路径）
 # IMAGES_DIR=images
-
-# 定时检查间隔（小时）
 CHECK_INTERVAL_HOURS=6
-""")
-load_dotenv(env_file)
+""", encoding='utf-8')
+load_dotenv(env_file, encoding='utf-8')
 
 # Pixiv auth
 PIXIV_USERNAME = os.getenv("PIXIV_USERNAME", "")
