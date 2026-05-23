@@ -26,32 +26,38 @@ def get_client():
     return PixivClient() if tracker else None
 
 
+async def _init_auth():
+    """后台执行 Pixiv 认证，完成后更新全局状态。"""
+    global tracker
+    try:
+        await asyncio.to_thread(auth)
+        tracker = Tracker()
+        start_scheduler(tracker)
+        templates.env.globals["pixiv_logged_in"] = True
+        print("[OK] Pixiv 登录成功，追踪功能已就绪")
+    except Exception as e:
+        print(f"[warn] Pixiv 未登录: {e}")
+        print("[warn] Web 界面可用，但追踪/下载功能需登录后使用")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global tracker
 
     init_db()
 
-    try:
-        # auth() 内部使用 Playwright sync API，必须在独立线程运行
-        await asyncio.to_thread(auth)
-        tracker = Tracker()
-        start_scheduler(tracker)
-    except Exception as e:
-        print(f"[warn] Pixiv 未登录: {e}")
-        print("[warn] Web 界面可用，但追踪/下载功能需登录后使用")
-        tracker = None
-
     from .routes import artists, works, settings
     app.include_router(artists.router)
     app.include_router(works.router)
     app.include_router(settings.router)
 
-    templates.env.globals["pixiv_logged_in"] = tracker is not None
+    templates.env.globals["pixiv_logged_in"] = False
+    auth_task = asyncio.create_task(_init_auth())
 
     yield
 
     stop_scheduler()
+    auth_task.cancel()
 
 
 from fastapi.responses import FileResponse
