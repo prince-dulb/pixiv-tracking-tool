@@ -171,6 +171,7 @@ def set_data_root(new_path):
     src.config.DATA_ROOT = new_root
     src.config.DATA_DIR = new_data
     src.config.IMAGES_DIR = new_images
+    src.config.DATABASE_URL = f"sqlite:///{new_data / 'pixiv_tracker.db'}"
 
 
 # Pixiv auth
