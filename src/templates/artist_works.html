@@ -10,6 +10,16 @@
     </div>
 </div>
 
+<div class="toolbar">
+    <div class="filter-bar">
+        <span>类型：</span>
+        <a href="/artist/{{ artist.id }}" class="filter-tag {% if not current_type %}active{% endif %}">全部</a>
+        {% for t, label in type_labels.items() %}
+        <a href="/artist/{{ artist.id }}?type={{ t }}" class="filter-tag {% if current_type == t %}active{% endif %}">{{ label }}</a>
+        {% endfor %}
+    </div>
+</div>
+
 {% if illustrations %}
 <div class="gallery">
     {% for illust in illustrations %}

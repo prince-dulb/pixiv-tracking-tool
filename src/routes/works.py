@@ -71,25 +71,28 @@ async def illust_detail(request: Request, illust_id: int):
 
 
 @router.get("/artist/{artist_id}")
-async def artist_works(request: Request, artist_id: int):
+async def artist_works(request: Request, artist_id: int, type: str = Query(None)):
     session = Session()
     artist = session.query(TrackedArtist).get(artist_id)
     if not artist:
         session.close()
         return templates.TemplateResponse(request, "error.html", {"message": "画师不存在"})
 
-    illustrations = (
+    query = (
         session.query(Illustration)
         .filter_by(artist_id=artist_id)
         .order_by(Illustration.posted_at.desc())
-        .limit(200)
-        .all()
     )
+    if type and type in TYPE_LABELS:
+        query = query.filter_by(type=type)
+
+    illustrations = query.limit(200).all()
     session.close()
 
     return templates.TemplateResponse(
         request, "artist_works.html",
-        {"artist": artist, "illustrations": illustrations, "type_labels": TYPE_LABELS},
+        {"artist": artist, "illustrations": illustrations,
+         "type_labels": TYPE_LABELS, "current_type": type},
     )
 
 

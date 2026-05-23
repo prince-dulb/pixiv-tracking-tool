@@ -18,7 +18,20 @@ async def list_artists(request: Request, search: str = Query(None)):
     if search:
         client = get_client()
         if client:
-            results = client.search_artist(search)
+            if search.strip().isdigit():
+                # 按 Pixiv user_id 直接查找
+                try:
+                    info = client.get_artist_detail(search.strip())
+                    results = [{
+                        "user_id": info["user_id"],
+                        "name": info["name"],
+                        "account": info["account"],
+                        "avatar_url": info["avatar_url"],
+                    }]
+                except Exception:
+                    results = []
+            else:
+                results = client.search_artist(search)
         else:
             session.close()
             return templates.TemplateResponse(
