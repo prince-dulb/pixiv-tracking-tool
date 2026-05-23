@@ -66,6 +66,12 @@ app = FastAPI(title="Pixiv Tracking Tool", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=resource_path("static")), name="static")
 
 
+@app.get("/api/status")
+async def api_status():
+    from fastapi.responses import JSONResponse
+    return JSONResponse({"logged_in": tracker is not None})
+
+
 # 动态服务图片文件（支持自定义路径）
 @app.get("/images/{path:path}")
 async def serve_image(path: str):

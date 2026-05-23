@@ -24,5 +24,18 @@
         {% endif %}
         {% block content %}{% endblock %}
     </main>
+    {% if not pixiv_logged_in %}
+    <script>
+    (function poll() {
+        fetch('/api/status')
+            .then(r => r.json())
+            .then(data => {
+                if (data.logged_in) { location.reload(); }
+                else { setTimeout(poll, 2000); }
+            })
+            .catch(() => setTimeout(poll, 5000));
+    })();
+    </script>
+    {% endif %}
 </body>
 </html>
