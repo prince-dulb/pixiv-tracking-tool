@@ -252,17 +252,21 @@ button:hover { opacity: 0.9; }
 /* 详情页导航 */
 .detail-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
 .nav-count { font-size: 13px; color: var(--text-dim); }
-.nav-arrows { display: flex; align-items: flex-start; gap: 12px; }
+.nav-arrows { display: flex; align-items: center; gap: 12px; }
+.nav-arrows-top { align-items: flex-start; }
+.nav-arrows-bottom { margin-top: 12px; justify-content: center; }
 .nav-arrow {
     display: flex; align-items: center; justify-content: center;
-    width: 40px; min-height: 80px;
-    font-size: 24px; color: var(--text-dim); text-decoration: none;
+    width: 40px; height: 40px;
+    font-size: 22px; color: var(--text-dim); text-decoration: none;
     border-radius: var(--radius); background: var(--surface);
     border: 1px solid var(--border);
-    transition: background 0.15s; flex-shrink: 0; margin-top: 8px;
+    transition: background 0.15s; flex-shrink: 0;
 }
+.nav-arrows-top .nav-arrow { min-height: 80px; margin-top: 8px; }
 .nav-arrow:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
 .nav-disabled { opacity: 0.3; pointer-events: none; }
+.nav-count-bottom { font-size: 13px; color: var(--text-dim); }
 .page-content { flex: 1; min-width: 0; }
 
 .page-viewer { display: flex; flex-direction: column; gap: 8px; }

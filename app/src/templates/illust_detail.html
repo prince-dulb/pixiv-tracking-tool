@@ -32,9 +32,9 @@
 {% if paths %}
 <div class="page-viewer">
     {% if prev_id or next_id %}
-    <div class="nav-arrows">
+    <div class="nav-arrows nav-arrows-top">
         {% if prev_id %}
-        <a href="/illust/{{ prev_id }}{{ nav_query }}" class="nav-arrow nav-prev" title="上一张">&larr;</a>
+        <a href="/illust/{{ prev_id }}{{ nav_query }}" class="nav-arrow nav-prev" title="上一张 (&larr;)">&larr;</a>
         {% else %}
         <span class="nav-arrow nav-disabled">&larr;</span>
         {% endif %}
@@ -47,7 +47,20 @@
             {% endfor %}
         </div>
         {% if next_id %}
-        <a href="/illust/{{ next_id }}{{ nav_query }}" class="nav-arrow nav-next" title="下一张">&rarr;</a>
+        <a href="/illust/{{ next_id }}{{ nav_query }}" class="nav-arrow nav-next" title="下一张 (&rarr;)">&rarr;</a>
+        {% else %}
+        <span class="nav-arrow nav-disabled">&rarr;</span>
+        {% endif %}
+    </div>
+    <div class="nav-arrows nav-arrows-bottom">
+        {% if prev_id %}
+        <a href="/illust/{{ prev_id }}{{ nav_query }}" class="nav-arrow nav-prev">&larr;</a>
+        {% else %}
+        <span class="nav-arrow nav-disabled">&larr;</span>
+        {% endif %}
+        <span class="nav-count-bottom">{{ current_idx }} / {{ total_count }}</span>
+        {% if next_id %}
+        <a href="/illust/{{ next_id }}{{ nav_query }}" class="nav-arrow nav-next">&rarr;</a>
         {% else %}
         <span class="nav-arrow nav-disabled">&rarr;</span>
         {% endif %}
@@ -76,6 +89,25 @@ document.addEventListener('keydown', function(e) {
     if (e.key === 'ArrowRight') { window.location.href = '/illust/{{ next_id }}{{ nav_query }}'; }
     {% endif %}
 });
+
+(function() {
+    var startX = 0, startY = 0;
+    document.addEventListener('touchstart', function(e) {
+        startX = e.touches[0].clientX;
+        startY = e.touches[0].clientY;
+    }, {passive: true});
+    document.addEventListener('touchend', function(e) {
+        var dx = e.changedTouches[0].clientX - startX;
+        var dy = e.changedTouches[0].clientY - startY;
+        if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy)) return;
+        {% if prev_id %}
+        if (dx > 0) { window.location.href = '/illust/{{ prev_id }}{{ nav_query }}'; }
+        {% endif %}
+        {% if next_id %}
+        if (dx < 0) { window.location.href = '/illust/{{ next_id }}{{ nav_query }}'; }
+        {% endif %}
+    });
+})();
 </script>
 {% endif %}
 
