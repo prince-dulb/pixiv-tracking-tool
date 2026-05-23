@@ -44,7 +44,9 @@ def _resolve_data_root():
         if p.is_absolute():
             return p
         return PROJECT_ROOT / p
-    return PROJECT_ROOT
+    if getattr(sys, 'frozen', False):
+        return PROJECT_ROOT
+    return APP_DIR
 
 
 def _migrate_to_data_root():
@@ -65,9 +67,10 @@ def _migrate_to_data_root():
     if not old_data_path.is_absolute():
         old_data_path = PROJECT_ROOT / old_data_path
 
-    # 目标路径（DATA_ROOT 默认 PROJECT_ROOT）
-    new_images = PROJECT_ROOT / "images"
-    new_data = PROJECT_ROOT / "data"
+    # 目标路径
+    _default_root = PROJECT_ROOT if getattr(sys, 'frozen', False) else APP_DIR
+    new_images = _default_root / "images"
+    new_data = _default_root / "data"
 
     new_images.mkdir(parents=True, exist_ok=True)
     new_data.mkdir(parents=True, exist_ok=True)
