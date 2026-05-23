@@ -254,8 +254,12 @@ class Tracker:
             paths = []
             if artist_dir.exists():
                 for f in sorted(artist_dir.iterdir()):
-                    if f.name.startswith(f"{illust.pixiv_illust_id}_p"):
-                        paths.append(f"{web_prefix}/{f.name}")
-                    elif f.name.startswith(f"{illust.pixiv_illust_id}."):
-                        paths.append(f"{web_prefix}/{f.name}")
+                    name = f.name
+                    # 匹配：{id}_p0.png, {id}.gif, {id}.jpg 等
+                    if name.startswith(f"{illust.pixiv_illust_id}_p") \
+                       or name.startswith(f"{illust.pixiv_illust_id}.") \
+                       or name.startswith(f"{illust.pixiv_illust_id}_"):
+                        if name.endswith('.part'):
+                            continue  # 跳过未完成的下载
+                        paths.append(f"{web_prefix}/{name}")
             illust.file_paths = ",".join(paths) if paths else None

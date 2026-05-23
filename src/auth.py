@@ -242,7 +242,6 @@ def configure_gallery_dl(refresh_token):
         }
     })
     gdl_config.set((), 'base-directory', str(project_root))
-    gdl_config.set((), 'postprocessors', [{'name': 'ugoira'}])
     gdl_config.set((), 'output', {
         'mode': 'auto',
         'skip': 'true',
