@@ -173,6 +173,9 @@ def set_data_root(new_path):
     src.config.IMAGES_DIR = new_images
 
 
+# Pixiv auth
+PIXIV_REFRESH_TOKEN = os.getenv("PIXIV_REFRESH_TOKEN", "")
+
 # Server
 HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", "8000"))
