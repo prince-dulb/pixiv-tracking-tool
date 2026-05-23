@@ -10,10 +10,9 @@ from requests.structures import CaseInsensitiveDict
 
 import gallery_dl.config as gdl_config
 
-from . import config as _cfg
+from .config import PIXIV_REFRESH_TOKEN, DATA_DIR
 
-def _token_file():
-    return _cfg.DATA_DIR / "pixiv_token.json"
+TOKEN_FILE = DATA_DIR / "pixiv_token.json"
 
 CLIENT_ID = "MOBrBDS8blbauoSck0ZfDbtuzpyT"
 CLIENT_SECRET = "lsACyCD94FhDUtGTXi3QzcFE2uU1hqtDaKeqrdwj"
@@ -24,21 +23,21 @@ TOKEN_URL = "https://oauth.secure.pixiv.net/auth/token"
 
 
 def _save_token(access_token, refresh_token):
-    _token_file().write_text(json.dumps({
+    TOKEN_FILE.write_text(json.dumps({
         "access_token": access_token,
         "refresh_token": refresh_token,
     }))
 
 
 def _load_token():
-    if _token_file().exists():
-        return json.loads(_token_file().read_text())
+    if TOKEN_FILE.exists():
+        return json.loads(TOKEN_FILE.read_text())
     return {}
 
 
 def _try_refresh_token():
     saved = _load_token()
-    refresh_token = saved.get("refresh_token") or _cfg.PIXIV_REFRESH_TOKEN
+    refresh_token = saved.get("refresh_token") or PIXIV_REFRESH_TOKEN
 
     if not refresh_token:
         return None
@@ -91,9 +90,13 @@ def _oauth_pkce():
     print("  Pixiv 需要浏览器授权登录")
     print("=" * 55)
 
-    # 尝试 Playwright 自动捕获
-    print("\n  尝试自动打开浏览器...")
-    code = _browser_oauth(login_url)
+    # 尝试 Playwright 自动捕获（打包后 Chromium 不在 bundle 中，跳过）
+    import sys
+    if getattr(sys, 'frozen', False):
+        code = None
+    else:
+        print("\n  尝试自动打开浏览器...")
+        code = _browser_oauth(login_url)
 
     # Playwright 不可用时回退到手动方式
     if not code:
