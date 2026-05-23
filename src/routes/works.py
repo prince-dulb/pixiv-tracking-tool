@@ -6,9 +6,11 @@ from ..web import templates, get_tracker
 
 router = APIRouter(tags=["works"])
 
+TYPE_LABELS = {"illust": "插画", "manga": "漫画", "ugoira": "动图"}
+
 
 @router.get("/")
-async def index(request: Request, artist_id: int = Query(None)):
+async def index(request: Request, artist_id: int = Query(None), type: str = Query(None)):
     session = Session()
     query = session.query(Illustration).order_by(Illustration.posted_at.desc())
 
@@ -18,9 +20,11 @@ async def index(request: Request, artist_id: int = Query(None)):
     else:
         artist = None
 
+    if type and type in TYPE_LABELS:
+        query = query.filter_by(type=type)
+
     illustrations = query.limit(200).all()
 
-    # 预加载画师信息
     artist_ids = {i.artist_id for i in illustrations}
     artists_map = {}
     if artist_ids:
@@ -33,7 +37,36 @@ async def index(request: Request, artist_id: int = Query(None)):
     return templates.TemplateResponse(
         request, "index.html",
         {"illustrations": illustrations, "artists": all_artists,
-         "artists_map": artists_map, "current_artist": artist},
+         "artists_map": artists_map, "current_artist": artist,
+         "current_type": type, "type_labels": TYPE_LABELS},
+    )
+
+
+@router.get("/illust/{illust_id}")
+async def illust_detail(request: Request, illust_id: int):
+    session = Session()
+    illust = session.query(Illustration).get(illust_id)
+    if not illust:
+        session.close()
+        return templates.TemplateResponse(request, "error.html", {"message": "作品不存在"})
+
+    artist = session.query(TrackedArtist).get(illust.artist_id)
+
+    # 解析文件路径和标签
+    import json
+    paths = illust.file_paths.split(",") if illust.file_paths else []
+    page_count = len(paths) or illust.page_count
+    try:
+        tags = json.loads(illust.tags) if illust.tags else []
+    except (json.JSONDecodeError, TypeError):
+        tags = []
+
+    session.close()
+
+    return templates.TemplateResponse(
+        request, "illust_detail.html",
+        {"illust": illust, "artist": artist, "paths": paths,
+         "page_count": page_count, "tags": tags, "type_labels": TYPE_LABELS},
     )
 
 
@@ -56,7 +89,7 @@ async def artist_works(request: Request, artist_id: int):
 
     return templates.TemplateResponse(
         request, "artist_works.html",
-        {"artist": artist, "illustrations": illustrations},
+        {"artist": artist, "illustrations": illustrations, "type_labels": TYPE_LABELS},
     )
 
 

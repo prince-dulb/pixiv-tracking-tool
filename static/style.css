@@ -231,6 +231,25 @@ button:hover { opacity: 0.9; }
     font-size: 13px;
 }
 
+/* 插图详情页 */
+.detail-header { margin-bottom: 20px; }
+.back-link { color: var(--text-dim); text-decoration: none; font-size: 14px; display: inline-block; margin-bottom: 12px; }
+.back-link:hover { color: var(--accent); }
+.detail-title-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.detail-title-row h2 { font-size: 18px; margin: 0; }
+.detail-meta { font-size: 13px; color: var(--text-dim); display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.detail-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+.tag { display: inline-block; padding: 2px 8px; border-radius: 10px; background: #222; color: #aaa; font-size: 11px; }
+
+.page-viewer { display: flex; flex-direction: column; gap: 8px; }
+.page-item { text-align: center; background: var(--surface); border-radius: var(--radius); overflow: hidden; }
+.page-image { max-width: 100%; max-height: 85vh; object-fit: contain; display: block; margin: 0 auto; }
+.page-num { padding: 6px; font-size: 12px; color: var(--text-dim); background: rgba(0,0,0,0.5); }
+
+.illust-badges { display: flex; gap: 4px; margin-top: 4px; }
+.type-badge { background: var(--accent); }
+.placeholder { background: #1a1a1a; min-height: 150px; }
+
 /* 空状态 */
 .empty { text-align: center; padding: 60px 20px; color: var(--text-dim); }
 .empty p { margin-bottom: 8px; }

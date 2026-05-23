@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="detail-header">
+    <a href="/" class="back-link">&larr; 返回画廊</a>
+    <div class="detail-title-row">
+        <h2>{{ illust.title }}</h2>
+        <span class="badge">{{ type_labels[illust.type] if illust.type in type_labels else illust.type }}</span>
+        {% if illust.page_count > 1 %}<span class="badge">{{ illust.page_count }}P</span>{% endif %}
+    </div>
+    <div class="detail-meta">
+        <span>画师：{{ artist.name if artist else 'Unknown' }} (@{{ artist.pixiv_account if artist else '' }})</span>
+        <span>发布于 {{ illust.posted_at.strftime('%Y-%m-%d') if illust.posted_at else '' }}</span>
+        <span>♥ {{ illust.bookmark_count or 0 }}</span>
+        <span>👁 {{ illust.view_count or 0 }}</span>
+        {% if tags %}
+        <div class="detail-tags">
+            {% for tag in tags %}
+            <span class="tag">{{ tag }}</span>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% if paths %}
+<div class="page-viewer">
+    {% for path in paths %}
+    <div class="page-item">
+        <img src="{{ path }}" alt="{{ illust.title }} - p{{ loop.index0 }}" class="page-image">
+        <div class="page-num">{{ loop.index }} / {{ paths|length }}</div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="empty"><p>尚未下载</p></div>
+{% endif %}
+
+{% endblock %}

@@ -6,7 +6,7 @@
     <div>
         <h2>{{ artist.name }}</h2>
         <p>@{{ artist.pixiv_account or 'unknown' }} · {{ illustrations|length }} 件作品</p>
-        <a href="https://www.pixiv.net/users/{{ artist.pixiv_user_id }}" target="_blank" class="ext-link">在 Pixiv 打开 →</a>
+        <a href="https://www.pixiv.net/users/{{ artist.pixiv_user_id }}" target="_blank" class="ext-link">在 Pixiv 打开</a>
     </div>
 </div>
 
@@ -14,18 +14,26 @@
 <div class="gallery">
     {% for illust in illustrations %}
     <div class="illust-card">
-        <a href="{{ illust.file_paths.split(',')[0] if illust.file_paths else '#' }}" target="_blank">
-            <img src="{{ illust.file_paths.split(',')[0] if illust.file_paths else '/static/placeholder.svg' }}"
+        {% if illust.file_paths %}
+        <a href="/illust/{{ illust.id }}">
+            <img src="{{ illust.file_paths.split(',')[0] }}"
                  alt="{{ illust.title }}"
                  loading="lazy"
                  class="illust-thumb"
                  onerror="this.src='/static/placeholder.svg'">
         </a>
+        {% else %}
+        <div class="illust-thumb placeholder"></div>
+        {% endif %}
         <div class="illust-info">
             <div class="illust-title" title="{{ illust.title }}">{{ illust.title }}</div>
             <div class="illust-meta">
                 <span>{{ illust.posted_at.strftime('%Y-%m-%d') if illust.posted_at else '' }}</span>
                 <span>♥ {{ illust.bookmark_count or 0 }}</span>
+            </div>
+            <div class="illust-badges">
+                <span class="badge type-badge">{{ type_labels.get(illust.type, illust.type) }}</span>
+                {% if illust.page_count > 1 %}<span class="badge">{{ illust.page_count }}P</span>{% endif %}
             </div>
         </div>
     </div>
