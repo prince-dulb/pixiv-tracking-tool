@@ -28,9 +28,8 @@
     <div id="login-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:200; justify-content:center; align-items:center;">
         <div style="background:var(--surface); border-radius:12px; padding:28px; max-width:480px; width:90%; border:1px solid var(--border);">
             <h3 style="margin-bottom:12px;">Pixiv 授权登录</h3>
-            <p style="font-size:13px; color:var(--text-dim); margin-bottom:8px;">已在浏览器中打开 Pixiv 登录页面。</p>
-            <p style="font-size:13px; color:var(--text-dim); margin-bottom:8px;">登录完成后，按 <b>F12</b> → Network 标签页 → 过滤 <b>callback</b>，复制 <b>code</b> 参数值。</p>
-            <p style="font-size:13px; color:var(--text-dim); margin-bottom:16px;">或者复制浏览器地址栏中以 <code>pixiv://</code> 开头的整条 URL 粘贴到下方。</p>
+            <p style="font-size:13px; color:var(--text-dim); margin-bottom:8px;">已在浏览器中打开 Pixiv 登录页面，完成登录。</p>
+            <p style="font-size:13px; color:var(--text-dim); margin-bottom:8px;">登录成功后浏览器会跳转到一个无法打开的页面，<b>复制地址栏整条 URL</b>（以 <code>pixiv://</code> 开头）粘贴到下方。</p>
             <form id="code-form" style="display:flex; gap:8px;">
                 <input type="text" id="code-input" placeholder="粘贴 code 或 URL" style="flex:1;">
                 <button type="submit">确认</button>
