@@ -99,8 +99,9 @@ def _oauth_pkce():
     print("=" * 55)
     print(f"\n1. 在浏览器中打开以下链接：\n\n  {login_url}\n")
     print("2. 登录你的 Pixiv 账号")
-    print("3. 登录成功后浏览器会跳转到一个空白页(pixiv://...)，")
-    print("   复制地址栏中的完整 URL\n")
+    print("3. 登录成功后浏览器会跳转到一个以 pixiv:// 开头的空白页")
+    print("   -> 点击浏览器地址栏，复制完整的 URL")
+    print("   -> 格式类似: pixiv://account/authorize?code=...&state=...\n")
 
     try:
         webbrowser.open(login_url)
@@ -108,11 +109,11 @@ def _oauth_pkce():
     except Exception:
         pass
 
-    callback_url = input("  >> 粘贴跳转后的 URL: ").strip()
+    callback_url = input("  >> 粘贴 pixiv:// 开头的 URL: ").strip()
 
     code = _extract_code(callback_url)
     if not code:
-        print("\n✗ 未能从 URL 中提取授权码。\n")
+        print("\n[X] 未能从 URL 中提取授权码。\n")
         return None
 
     local_time = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S+00:00")
@@ -141,13 +142,13 @@ def _oauth_pkce():
     )
 
     if r.status_code != 200:
-        print(f"\n✗ Token 交换失败: HTTP {r.status_code}")
+        print(f"\n[X] Token 交换失败: HTTP {r.status_code}")
         print(f"  {r.text}\n")
         return None
 
     resp = r.json()
     _save_token(resp["access_token"], resp["refresh_token"])
-    print("\n✓ 登录成功！\n")
+    print("\n[OK] 登录成功！\n")
     return resp["refresh_token"]
 
 
@@ -157,13 +158,33 @@ def _extract_code(url_string):
 
     if not url_string:
         return None
-    if "code=" not in url_string:
-        return url_string
 
-    parsed = urlparse(url_string.strip())
+    url_string = url_string.strip()
+
+    # 用户可能粘贴了重定向过程中的中间 URL，提示他们找最终的跳转 URL
+    if "accounts.pixiv.net" in url_string:
+        print("\n  [!] 你粘贴的是登录过程中的中间跳转 URL，不是最终的回调地址。")
+        print("  登录成功后浏览器会跳转到一个以 pixiv:// 开头的空白页。")
+        print("  请复制那个页面的完整地址。\n")
+        return None
+
+    # 尝试从 URL query 参数中提取
+    parsed = urlparse(url_string)
     params = parse_qs(parsed.query)
-    codes = params.get("code", [])
-    return codes[0] if codes else None
+    code = params.get("code", [None])[0]
+
+    if code:
+        return code
+
+    # pixiv:// 回调 URL：scheme 可能被解析为 hostname
+    # 格式: pixiv://account/authorize?code=xxx&state=xxx
+    if parsed.scheme == "pixiv":
+        print("\n  [!] 未能从 pixiv:// URL 中提取到 code 参数。")
+        print("  请确认复制的是完整 URL，例如：")
+        print("  pixiv://account/authorize?code=SECRET&state=...\n")
+        return None
+
+    return None
 
 
 def configure_gallery_dl(refresh_token):
