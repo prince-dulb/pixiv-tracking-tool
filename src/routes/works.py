@@ -1,3 +1,4 @@
+import threading
 from fastapi import APIRouter, Request, Query
 from fastapi.responses import RedirectResponse
 
@@ -100,6 +101,10 @@ async def artist_works(request: Request, artist_id: int, type: str = Query(None)
 async def refresh_all():
     tracker = get_tracker()
     if tracker:
-        tracker.check_updates()
-        tracker.download_pending()
+        threading.Thread(target=_do_refresh_all, args=(tracker,), daemon=True).start()
     return RedirectResponse("/", status_code=303)
+
+
+def _do_refresh_all(tracker):
+    tracker.check_updates()
+    tracker.download_pending()

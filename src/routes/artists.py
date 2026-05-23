@@ -1,3 +1,4 @@
+import threading
 from fastapi import APIRouter, Request, Form, Query
 from fastapi.responses import RedirectResponse
 
@@ -103,16 +104,23 @@ async def toggle_artist(artist_id: int):
 async def refresh_artist(artist_id: int):
     tracker = get_tracker()
     if tracker:
-        session = Session()
-        artist = session.query(TrackedArtist).get(artist_id)
-        if artist:
-            from ..models import Illustration
-            # 清除旧作品的文件路径，强制重新检查
-            for i in session.query(Illustration).filter_by(artist_id=artist.id).all():
-                i.file_paths = None
-            session.commit()
-            tracker._download_artist(artist.pixiv_user_id)
+        threading.Thread(target=_do_refresh_artist, args=(tracker, artist_id), daemon=True).start()
+    return RedirectResponse("/artists", status_code=303)
+
+
+def _do_refresh_artist(tracker, artist_id):
+    session = Session()
+    artist = session.query(TrackedArtist).get(artist_id)
+    if artist:
+        tracker._update_file_paths(session, artist)
+        session.commit()
+        missing = (
+            session.query(Illustration)
+            .filter_by(artist_id=artist.id)
+            .filter(Illustration.file_paths == None).count()
+        )
+        if missing > 0:
+            tracker._download_artist(artist.pixiv_user_id, clear_archive=True)
             tracker._update_file_paths(session, artist)
             session.commit()
-        session.close()
-    return RedirectResponse("/artists", status_code=303)
+    session.close()
