@@ -139,13 +139,9 @@ def _oauth_pkce():
     print("  Pixiv 需要浏览器授权登录")
     print("=" * 55)
 
-    # 尝试 Playwright 自动捕获（打包后 Chromium 不在 bundle 中，跳过）
-    import sys
-    if getattr(sys, 'frozen', False):
-        code = None
-    else:
-        print("\n  尝试自动打开浏览器...")
-        code = _browser_oauth(login_url)
+    # 尝试 Playwright 自动捕获（使用系统浏览器）
+    print("\n  尝试自动打开浏览器...")
+    code = _browser_oauth(login_url)
 
     # Playwright 不可用时：打开浏览器，等待网页端提交 code
     if not code:
@@ -212,6 +208,25 @@ def _oauth_pkce():
     return resp["refresh_token"]
 
 
+def _find_system_browser():
+    """查找系统中可用的 Chromium 浏览器。"""
+    import shutil
+    candidates = [
+        r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+        r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+        r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+        r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+    ]
+    for name in ["chrome", "chromium", "msedge"]:
+        p = shutil.which(name)
+        if p:
+            candidates.append(p)
+    for p in candidates:
+        if Path(p).exists():
+            return p
+    return None
+
+
 def _browser_oauth(login_url):
     """用 Playwright 打开浏览器，自动截获回调请求中的 code。"""
     from playwright.sync_api import sync_playwright
@@ -219,9 +234,14 @@ def _browser_oauth(login_url):
     code = None
     browser_closed = False
 
+    browser_path = _find_system_browser()
+    if not browser_path:
+        print("\n  [!] 未找到系统浏览器，无法自动捕获。\n")
+        return None
+
     try:
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=False)
+            browser = p.chromium.launch(headless=False, executable_path=browser_path)
             page = browser.new_page()
 
             def on_request(request):
