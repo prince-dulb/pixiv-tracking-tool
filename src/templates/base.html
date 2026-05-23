@@ -17,7 +17,7 @@
     </nav>
     <main class="container">
         {% if not pixiv_logged_in %}
-        <div class="alert alert-warn">未登录 Pixiv。请配置 .env 中的 PIXIV_USERNAME 和 PIXIV_PASSWORD，然后重启服务。</div>
+        <div class="alert alert-warn">未登录 Pixiv。首次启动会自动弹出浏览器授权登录。</div>
         {% endif %}
         {% if error %}
         <div class="alert alert-error">{{ error }}</div>

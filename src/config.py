@@ -54,12 +54,12 @@ def set_images_dir(new_path: str):
     """修改图片存储路径并持久化到 .env。"""
     import re
     env_file = PROJECT_ROOT / ".env"
-    content = env_file.read_text() if env_file.exists() else ""
+    content = env_file.read_text(encoding='utf-8') if env_file.exists() else ""
     if "IMAGES_DIR=" in content:
         content = re.sub(r'IMAGES_DIR=.*', f'IMAGES_DIR={new_path}', content)
     else:
         content += f'\nIMAGES_DIR={new_path}\n'
-    env_file.write_text(content)
+    env_file.write_text(content, encoding='utf-8')
     os.environ["IMAGES_DIR"] = new_path
 
 # Server
