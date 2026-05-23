@@ -1,7 +1,10 @@
 import json
 import os
+import io
 import re
+import zipfile
 from datetime import datetime, timezone
+from PIL import Image
 from sqlalchemy import and_
 
 import gallery_dl.config as gdl_config
@@ -50,6 +53,7 @@ class Tracker:
         self._fetch_all_illusts(session, artist)
         self._download_artist(artist.pixiv_user_id)
         self._update_file_paths(session, artist)
+        self._convert_ugoira_zips(session, artist)
 
         session.close()
         return artist, True
@@ -71,6 +75,7 @@ class Tracker:
         for artist in artists:
             new_count = self._fetch_new_illusts(session, artist)
             self._update_file_paths(session, artist)
+            self._convert_ugoira_zips(session, artist)
             session.commit()
             missing = (
                 session.query(Illustration)
@@ -80,6 +85,7 @@ class Tracker:
             if new_count > 0 or missing > 0:
                 self._download_artist(artist.pixiv_user_id, clear_archive=(missing > 0))
                 self._update_file_paths(session, artist)
+                self._convert_ugoira_zips(session, artist)
             results[artist.name] = new_count
             artist.last_checked_at = datetime.utcnow()
 
@@ -93,6 +99,7 @@ class Tracker:
         artists = session.query(TrackedArtist).filter_by(is_active=True).all()
         for artist in artists:
             self._update_file_paths(session, artist)
+            self._convert_ugoira_zips(session, artist)
             session.commit()
             missing = (
                 session.query(Illustration)
@@ -102,6 +109,7 @@ class Tracker:
             if missing > 0:
                 self._download_artist(artist.pixiv_user_id, clear_archive=True)
                 self._update_file_paths(session, artist)
+                self._convert_ugoira_zips(session, artist)
         session.commit()
         session.close()
 
@@ -165,6 +173,71 @@ class Tracker:
             job.run()
         except Exception as e:
             print(f"  [!] 下载出错 ({user_id}): {e}")
+
+    def _convert_ugoira_zips(self, session, artist):
+        """将画师目录下已下载的 ugoira ZIP 转换为 GIF。"""
+        import zipfile
+        from PIL import Image
+        artist_dir = IMAGES_DIR / artist.pixiv_user_id
+        if not artist_dir.exists():
+            return
+
+        ugoira_illusts = (
+            session.query(Illustration)
+            .filter_by(artist_id=artist.id, type='ugoira')
+            .all()
+        )
+
+        for illust in ugoira_illusts:
+            zip_path = artist_dir / f"{illust.pixiv_illust_id}_ugoira.zip"
+            gif_path = artist_dir / f"{illust.pixiv_illust_id}.gif"
+            if not zip_path.exists() or gif_path.exists():
+                continue
+
+            try:
+                # 获取帧延迟信息
+                metadata = self.client.get_illust_detail(illust.pixiv_illust_id)
+                frames_data = []
+                with zipfile.ZipFile(zip_path, 'r') as zf:
+                    for name in sorted(zf.namelist()):
+                        with zf.open(name) as f:
+                            img = Image.open(io.BytesIO(f.read()))
+                            frames_data.append(img.convert('RGBA'))
+
+                if not frames_data:
+                    continue
+
+                # 从 Pixiv API 获取帧延迟
+                delays = []
+                try:
+                    data = self.client._get(
+                        '/v1/ugoira/metadata',
+                        {'illust_id': illust.pixiv_illust_id}
+                    )
+                    frames = data.get('ugoira_metadata', {}).get('frames', [])
+                    delays = [f.get('delay', 100) for f in frames]
+                except Exception:
+                    pass
+
+                if frames_data:
+                    kwargs = {
+                        'save_all': True,
+                        'append_images': frames_data[1:],
+                        'loop': 0,
+                        'optimize': True,
+                        'disposal': 2,
+                    }
+                    if delays:
+                        kwargs['duration'] = delays
+                    frames_data[0].save(gif_path, **kwargs)
+
+                # 更新文件路径指向 GIF
+                web_prefix = f"/images/{artist.pixiv_user_id}"
+                illust.file_paths = f"{web_prefix}/{gif_path.name}"
+                zip_path.unlink()  # 删除原始 ZIP
+
+            except Exception as e:
+                print(f"  [!] ugoira 转换失败 {illust.title}: {e}")
 
     def _update_file_paths(self, session, artist):
         """扫描下载目录，检查并更新所有作品的本地文件路径。缺失的标记为待下载。"""

@@ -239,10 +239,10 @@ def configure_gallery_dl(refresh_token):
             'refresh-token': refresh_token,
             'directory': ['images', '{user[id]}'],
             'archive': str(DATA_DIR / 'gallery_dl_archive.db'),
-            'postprocessors': [{'name': 'ugoira'}],
         }
     })
     gdl_config.set((), 'base-directory', str(project_root))
+    gdl_config.set((), 'postprocessors', [{'name': 'ugoira'}])
     gdl_config.set((), 'output', {
         'mode': 'auto',
         'skip': 'true',
