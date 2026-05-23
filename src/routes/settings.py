@@ -3,13 +3,13 @@ from fastapi.responses import RedirectResponse
 
 from ..web import get_tracker, templates
 from ..models import Session, TrackedArtist, Illustration
-from ..config import DATA_ROOT, set_data_root
+from ..config import set_data_root
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 
 
 def _settings_context():
-    from ..config import CHECK_INTERVAL_HOURS, CHECK_INTERVAL_MINUTES, PORT
+    from ..config import CHECK_INTERVAL_HOURS, CHECK_INTERVAL_MINUTES, PORT, DATA_ROOT
     session = Session()
     artist_count = session.query(TrackedArtist).count()
     illust_count = session.query(Illustration).count()
