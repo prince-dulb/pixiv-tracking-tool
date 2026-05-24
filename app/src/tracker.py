@@ -38,7 +38,7 @@ class Tracker:
         self.client = PixivClient()
 
     def add_artist(self, user_id):
-        """添加一个特别关注画师，并拉取其全部已有作品。"""
+        """添加一个特别关注画师（只创建记录，不拉取作品）。"""
         session = Session()
 
         existing = session.query(TrackedArtist).filter_by(pixiv_user_id=user_id).first()
@@ -55,14 +55,51 @@ class Tracker:
         )
         session.add(artist)
         session.commit()
-
-        self._fetch_all_illusts(session, artist)
-        self._download_artist(artist.pixiv_user_id)
-        self._update_file_paths(session, artist)
-        self._convert_ugoira_zips(session, artist)
-
         session.close()
         return artist, True
+
+    def fetch_artist(self, artist_id):
+        """后台拉取画师的全部作品并下载（用于添加画师后的异步任务）。"""
+        session = Session()
+        artist = session.query(TrackedArtist).get(artist_id)
+        if not artist:
+            session.close()
+            return
+
+        progress.reset()
+        progress.set_artist(artist.name)
+        progress.set_detail(f"正在获取 {artist.name} 的全部作品...")
+        progress.set_progress(0, 1)
+
+        try:
+            count = self._fetch_all_illusts(session, artist)
+            progress.add_found(count)
+        except Exception as e:
+            progress.add_error(f"{artist.name}: {e}")
+
+        self._update_file_paths(session, artist)
+        self._convert_ugoira_zips(session, artist)
+        session.commit()
+
+        missing = (
+            session.query(Illustration)
+            .filter_by(artist_id=artist.id)
+            .filter(Illustration.file_paths == None).count()
+        )
+        if count > 0 or missing > 0:
+            progress.set_detail(f"正在下载 {artist.name} 的作品...")
+            try:
+                self._download_artist(artist.pixiv_user_id, clear_archive=(missing > 0))
+                progress.add_downloaded(count or missing)
+            except Exception as e:
+                progress.add_error(f"下载 {artist.name}: {e}")
+
+            self._update_file_paths(session, artist)
+            self._convert_ugoira_zips(session, artist)
+            session.commit()
+
+        progress.finish()
+        session.close()
 
     def remove_artist(self, artist_id):
         session = Session()

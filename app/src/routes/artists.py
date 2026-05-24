@@ -55,10 +55,9 @@ def _artists_context(session):
 
 @router.post("/add")
 async def add_artist(request: Request, user_id: str = Form(...)):
-    client = get_client()
     tracker = get_tracker()
 
-    if not client or not tracker:
+    if not tracker:
         session = Session()
         artists, counts = _artists_context(session)
         session.close()
@@ -68,15 +67,18 @@ async def add_artist(request: Request, user_id: str = Form(...)):
         )
 
     artist, created = tracker.add_artist(user_id)
-    session = Session()
-    artists, counts = _artists_context(session)
-    session.close()
-
     if not created:
+        session = Session()
+        artists, counts = _artists_context(session)
+        session.close()
         return templates.TemplateResponse(
             request, "artists.html",
             {"artists": artists, "artist_counts": counts, "results": [], "error": f"画师 {artist.name} 已在特别关注列表中"}
         )
+
+    # 后台拉取作品和下载，不阻塞页面
+    import threading
+    threading.Thread(target=tracker.fetch_artist, args=(artist.id,), daemon=True).start()
 
     return RedirectResponse("/artists", status_code=303)
 
