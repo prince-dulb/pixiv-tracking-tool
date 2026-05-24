@@ -67,9 +67,10 @@ class Tracker:
             return
 
         progress.reset()
+        progress.begin_phase("checking")
         progress.set_artist(artist.name)
         progress.set_detail(f"正在获取 {artist.name} 的全部作品...")
-        progress.set_progress(0, 1)
+        progress.set_progress(1, 1)
 
         try:
             count = self._fetch_all_illusts(session, artist)
@@ -87,6 +88,7 @@ class Tracker:
             .filter(Illustration.file_paths == None).count()
         )
         if count > 0 or missing > 0:
+            progress.begin_phase("downloading")
             progress.set_detail(f"正在下载 {artist.name} 的作品...")
             try:
                 self._download_artist(artist.pixiv_user_id, clear_archive=(missing > 0))

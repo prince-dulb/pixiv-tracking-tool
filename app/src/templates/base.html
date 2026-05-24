@@ -94,8 +94,8 @@
                     var pct = data.total_artists > 0
                         ? Math.round(data.artist_index / data.total_artists * 100) : 0;
                     var bar = document.getElementById('progress-bar');
-                    bar.style.width = pct + '%';
-                    bar.className = 'progress-bar-fill' + (data.phase === 'downloading' ? ' progress-bar-active' : '');
+                    bar.style.width = Math.max(pct, 5) + '%';
+                    bar.className = 'progress-bar-fill progress-bar-active';
                     document.getElementById('progress-pct').textContent = pct + '%';
                     var parts = [];
                     if (data.current_artist) parts.push(data.current_artist);
