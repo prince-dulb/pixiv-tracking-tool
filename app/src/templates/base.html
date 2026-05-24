@@ -25,6 +25,7 @@
         <div id="progress-box" class="progress-box" style="display:none;">
             <div class="progress-header">
                 <span id="progress-message"></span>
+                <span id="progress-pct" style="margin-left:auto;font-size:13px;color:var(--accent);"></span>
             </div>
             <div class="progress-bar-track">
                 <div id="progress-bar" class="progress-bar-fill" style="width:0%"></div>
@@ -92,7 +93,10 @@
                     box.style.display = 'block';
                     var pct = data.total_artists > 0
                         ? Math.round(data.artist_index / data.total_artists * 100) : 0;
-                    document.getElementById('progress-bar').style.width = pct + '%';
+                    var bar = document.getElementById('progress-bar');
+                    bar.style.width = pct + '%';
+                    bar.className = 'progress-bar-fill' + (data.phase === 'downloading' ? ' progress-bar-active' : '');
+                    document.getElementById('progress-pct').textContent = pct + '%';
                     var parts = [];
                     if (data.current_artist) parts.push(data.current_artist);
                     if (data.current_detail) parts.push(data.current_detail);
