@@ -1,8 +1,61 @@
 {% extends "base.html" %}
 {% block content %}
 
+<div class="detail-nav">
+    <a href="{{ back_url }}" class="back-link">&larr; 返回</a>
+    <div style="display:flex;align-items:center;gap:12px;">
+        {% if total_count %}
+        <span class="nav-count">{{ current_idx }} / {{ total_count }}</span>
+        {% endif %}
+        <button id="toggle-filters" class="btn-sm" style="background:#333;">筛选</button>
+    </div>
+</div>
+
+<div id="filter-panel" class="detail-filters" style="display:none;">
+    <div class="filter-bar">
+        <span>画师：</span>
+        <a href="{{ all_url }}"
+           class="filter-tag {% if selected_artist_ids is none %}active{% endif %}">全部</a>
+        {% for a in all_artists %}
+        <a href="{{ detail_toggle_urls[a.id] }}"
+           class="filter-tag {% if selected_artist_ids is none or a.id in selected_artist_ids %}active{% endif %}">{{ a.name }}</a>
+        {% endfor %}
+        <a href="{{ artist_invert_url }}" class="filter-tag" style="background:#333;border-color:#555;">反选</a>
+    </div>
+    <div class="filter-bar" style="margin-top:6px;">
+        <span>类型：</span>
+        <a href="{{ all_url }}"
+           class="filter-tag {% if selected_types is none %}active{% endif %}">全部</a>
+        {% for t, label in type_labels.items() %}
+        <a href="{{ detail_type_urls[t] }}"
+           class="filter-tag {% if selected_types is none or t in selected_types %}active{% endif %}">{{ label }}</a>
+        {% endfor %}
+        <a href="{{ type_invert_url }}" class="filter-tag" style="background:#333;border-color:#555;">反选</a>
+    </div>
+</div>
+
+<script>
+(function() {
+    var btn = document.getElementById('toggle-filters');
+    var panel = document.getElementById('filter-panel');
+    var open = localStorage.getItem('filter-panel') === 'open';
+    panel.style.display = open ? 'block' : 'none';
+    btn.textContent = open ? '收起' : '筛选';
+    btn.addEventListener('click', function() {
+        if (panel.style.display === 'none') {
+            panel.style.display = 'block';
+            this.textContent = '收起';
+            localStorage.setItem('filter-panel', 'open');
+        } else {
+            panel.style.display = 'none';
+            this.textContent = '筛选';
+            localStorage.setItem('filter-panel', 'closed');
+        }
+    });
+})();
+</script>
+
 <div class="detail-header">
-    <a href="/" class="back-link">&larr; 返回画廊</a>
     <div class="detail-title-row">
         <h2>{{ illust.title }}</h2>
         <span class="badge">{{ type_labels[illust.type] if illust.type in type_labels else illust.type }}</span>
@@ -11,8 +64,8 @@
     <div class="detail-meta">
         <span>画师：{{ artist.name if artist else 'Unknown' }} (@{{ artist.pixiv_account if artist else '' }})</span>
         <span>发布于 {{ illust.posted_at.strftime('%Y-%m-%d') if illust.posted_at else '' }}</span>
-        <span>♥ {{ illust.bookmark_count or 0 }}</span>
-        <span>👁 {{ illust.view_count or 0 }}</span>
+        <span>&hearts; {{ illust.bookmark_count or 0 }}</span>
+        <span>&#128065; {{ illust.view_count or 0 }}</span>
         {% if tags %}
         <div class="detail-tags">
             {% for tag in tags %}
@@ -32,8 +85,64 @@
     </div>
     {% endfor %}
 </div>
+
+{% if prev_id or next_id %}
+<div class="nav-arrows nav-arrows-bottom">
+    {% if prev_id %}
+    <a href="/illust/{{ prev_id }}{{ nav_query }}" class="nav-arrow nav-prev">&larr;</a>
+    {% else %}
+    <span class="nav-arrow nav-disabled">&larr;</span>
+    {% endif %}
+    <span class="nav-count-bottom">{{ current_idx }} / {{ total_count }}</span>
+    {% if next_id %}
+    <a href="/illust/{{ next_id }}{{ nav_query }}" class="nav-arrow nav-next">&rarr;</a>
+    {% else %}
+    <span class="nav-arrow nav-disabled">&rarr;</span>
+    {% endif %}
+</div>
+
+{% if prev_id %}
+<a href="/illust/{{ prev_id }}{{ nav_query }}" class="side-arrow side-prev" title="上一张">&larr;</a>
+{% endif %}
+{% if next_id %}
+<a href="/illust/{{ next_id }}{{ nav_query }}" class="side-arrow side-next" title="下一张">&rarr;</a>
+{% endif %}
+{% endif %}
 {% else %}
 <div class="empty"><p>尚未下载</p></div>
+{% endif %}
+
+{% if prev_id or next_id %}
+<script>
+document.addEventListener('keydown', function(e) {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    {% if prev_id %}
+    if (e.key === 'ArrowLeft') { window.location.href = '/illust/{{ prev_id }}{{ nav_query }}'; }
+    {% endif %}
+    {% if next_id %}
+    if (e.key === 'ArrowRight') { window.location.href = '/illust/{{ next_id }}{{ nav_query }}'; }
+    {% endif %}
+});
+
+(function() {
+    var startX = 0, startY = 0;
+    document.addEventListener('touchstart', function(e) {
+        startX = e.touches[0].clientX;
+        startY = e.touches[0].clientY;
+    }, {passive: true});
+    document.addEventListener('touchend', function(e) {
+        var dx = e.changedTouches[0].clientX - startX;
+        var dy = e.changedTouches[0].clientY - startY;
+        if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy)) return;
+        {% if prev_id %}
+        if (dx > 0) { window.location.href = '/illust/{{ prev_id }}{{ nav_query }}'; }
+        {% endif %}
+        {% if next_id %}
+        if (dx < 0) { window.location.href = '/illust/{{ next_id }}{{ nav_query }}'; }
+        {% endif %}
+    });
+})();
+</script>
 {% endif %}
 
 {% endblock %}

@@ -3,6 +3,7 @@ from fastapi import APIRouter, Request, Form, Query
 from fastapi.responses import RedirectResponse
 
 from ..models import Session, TrackedArtist, Illustration
+from .. import config as _cfg
 from ..web import get_tracker, get_client, templates
 
 router = APIRouter(prefix="/artists", tags=["artists"])
@@ -55,10 +56,9 @@ def _artists_context(session):
 
 @router.post("/add")
 async def add_artist(request: Request, user_id: str = Form(...)):
-    client = get_client()
     tracker = get_tracker()
 
-    if not client or not tracker:
+    if not tracker:
         session = Session()
         artists, counts = _artists_context(session)
         session.close()
@@ -68,15 +68,18 @@ async def add_artist(request: Request, user_id: str = Form(...)):
         )
 
     artist, created = tracker.add_artist(user_id)
-    session = Session()
-    artists, counts = _artists_context(session)
-    session.close()
-
     if not created:
+        session = Session()
+        artists, counts = _artists_context(session)
+        session.close()
         return templates.TemplateResponse(
             request, "artists.html",
             {"artists": artists, "artist_counts": counts, "results": [], "error": f"画师 {artist.name} 已在特别关注列表中"}
         )
+
+    # 后台拉取作品和下载，不阻塞页面
+    import threading
+    threading.Thread(target=tracker.fetch_artist, args=(artist.id,), daemon=True).start()
 
     return RedirectResponse("/artists", status_code=303)
 
@@ -109,18 +112,57 @@ async def refresh_artist(artist_id: int):
 
 
 def _do_refresh_artist(tracker, artist_id):
+    from .. import progress
+
     session = Session()
     artist = session.query(TrackedArtist).get(artist_id)
-    if artist:
-        tracker._update_file_paths(session, artist)
-        session.commit()
-        missing = (
+    if not artist:
+        session.close()
+        return
+
+    task_id = progress.begin_task(artist.name)
+    progress.begin_phase(task_id, "checking")
+    progress.set_artist_progress(task_id, 1, 1)
+    progress.set_detail(task_id, "正在扫描本地文件...")
+
+    tracker._update_file_paths(session, artist)
+    tracker._convert_ugoira_zips(session, artist)
+    session.commit()
+
+    pending = (
+        session.query(Illustration)
+        .filter_by(artist_id=artist.id)
+        .filter(Illustration.file_paths == None)
+        .all()
+    )
+
+    if pending:
+        all_illusts = (
             session.query(Illustration)
-            .filter_by(artist_id=artist.id)
-            .filter(Illustration.file_paths == None).count()
+            .filter_by(artist_id=artist.id).all()
         )
-        if missing > 0:
-            tracker._download_artist(artist.pixiv_user_id, clear_archive=True)
-            tracker._update_file_paths(session, artist)
-            session.commit()
+        files_total = sum(i.page_count for i in all_illusts)
+
+        progress.begin_phase(task_id, "downloading")
+        progress.set_files_total(task_id, files_total)
+        progress.set_dl_artist_progress(task_id, 1, 1)
+        progress.set_detail(task_id, f"正在下载 {artist.name} 的作品...")
+
+        artist_dir = str(_cfg.IMAGES_DIR / f"{artist.name} {artist.pixiv_user_id}")
+
+        try:
+            tracker._download_artist(
+                artist.pixiv_user_id,
+                artist_dir=artist_dir,
+                task_id=task_id,
+                clear_archive=True,
+            )
+        except Exception as e:
+            progress.add_error(task_id, f"下载 {artist.name}: {e}")
+
+        tracker._update_file_paths(session, artist)
+        tracker._convert_ugoira_zips(session, artist)
+        session.commit()
+
+    progress.finish_task(task_id)
     session.close()

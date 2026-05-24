@@ -25,7 +25,7 @@
     {% for illust in illustrations %}
     <div class="illust-card">
         {% if illust.file_paths %}
-        <a href="/illust/{{ illust.id }}">
+        <a href="/illust/{{ illust.id }}?artist_id={{ artist.id }}{% if current_type %}&type={{ current_type }}{% endif %}">
             <img src="{{ illust.file_paths.split(',')[0] }}"
                  alt="{{ illust.title }}"
                  loading="lazy"
