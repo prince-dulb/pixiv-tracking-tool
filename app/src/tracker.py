@@ -1,3 +1,4 @@
+import collections
 import json
 import os
 import io
@@ -38,13 +39,15 @@ class Tracker:
         self.client = PixivClient()
 
     def add_artist(self, user_id):
-        """添加一个特别关注画师（只创建记录，不拉取作品）。"""
+        """添加一个特别关注画师（只创建记录，不拉取作品）。
+        返回 (ArtistLike, is_new)。ArtistLike 有 .id 和 .name 属性。"""
         session = Session()
 
         existing = session.query(TrackedArtist).filter_by(pixiv_user_id=user_id).first()
         if existing:
+            eid, ename = existing.id, existing.name
             session.close()
-            return existing, False
+            return type("_ArtistRef", (), {"id": eid, "name": ename})(), False
 
         info = self.client.get_artist_detail(user_id)
         artist = TrackedArtist(
@@ -55,8 +58,9 @@ class Tracker:
         )
         session.add(artist)
         session.commit()
+        aid, aname = artist.id, artist.name
         session.close()
-        return artist, True
+        return type("_ArtistRef", (), {"id": aid, "name": aname})(), True
 
     def fetch_artist(self, artist_id):
         """后台拉取画师的全部作品并下载（用于添加画师后的异步任务）。"""
@@ -66,41 +70,64 @@ class Tracker:
             session.close()
             return
 
-        progress.reset()
-        progress.begin_phase("checking")
-        progress.set_artist(artist.name)
-        progress.set_detail(f"正在获取 {artist.name} 的全部作品...")
-        progress.set_progress(1, 1)
+        task_id = progress.begin_task(artist.name)
+        progress.begin_phase(task_id, "checking")
+        progress.set_detail(task_id, f"正在获取 {artist.name} 的全部作品...")
+        progress.set_artist_progress(task_id, 1, 1)
 
         try:
             count = self._fetch_all_illusts(session, artist)
-            progress.add_found(count)
+            progress.add_found(task_id, count)
         except Exception as e:
-            progress.add_error(f"{artist.name}: {e}")
+            progress.add_error(task_id, f"{artist.name}: {e}")
+            progress.finish_task(task_id)
+            session.close()
+            return
 
         self._update_file_paths(session, artist)
         self._convert_ugoira_zips(session, artist)
         session.commit()
 
-        missing = (
+        pending = (
             session.query(Illustration)
             .filter_by(artist_id=artist.id)
-            .filter(Illustration.file_paths == None).count()
+            .filter(Illustration.file_paths == None)
+            .all()
         )
-        if count > 0 or missing > 0:
-            progress.begin_phase("downloading")
-            progress.set_detail(f"正在下载 {artist.name} 的作品...")
+        total_pending = len(pending)
+
+        if total_pending > 0:
+            needs_clear = total_pending > count
+
+            if needs_clear:
+                all_illusts = (
+                    session.query(Illustration)
+                    .filter_by(artist_id=artist.id).all()
+                )
+                files_total = sum(i.page_count for i in all_illusts)
+            else:
+                files_total = sum(i.page_count for i in pending)
+
+            progress.begin_phase(task_id, "downloading")
+            progress.set_files_total(task_id, files_total)
+            progress.set_dl_artist_progress(task_id, 1, 1)
+            progress.set_detail(task_id, f"正在下载 {artist.name} 的作品...")
+
             try:
-                self._download_artist(artist.pixiv_user_id, clear_archive=(missing > 0))
-                progress.add_downloaded(count or missing)
+                self._download_artist(
+                    artist.pixiv_user_id,
+                    artist_dir=str(_cfg.IMAGES_DIR / _artist_dir_name(artist)),
+                    task_id=task_id,
+                    clear_archive=needs_clear,
+                )
             except Exception as e:
-                progress.add_error(f"下载 {artist.name}: {e}")
+                progress.add_error(task_id, f"下载 {artist.name}: {e}")
 
             self._update_file_paths(session, artist)
             self._convert_ugoira_zips(session, artist)
             session.commit()
 
-        progress.finish()
+        progress.finish_task(task_id)
         session.close()
 
     def remove_artist(self, artist_id):
@@ -112,85 +139,157 @@ class Tracker:
         session.close()
 
     def check_updates(self):
-        """检查所有活跃画师的新作品。"""
+        """检查所有活跃画师的新作品——先全部检查，再统一下载。"""
         session = Session()
         artists = session.query(TrackedArtist).filter_by(is_active=True).all()
         results = {}
 
-        progress.reset()
-        progress.set_progress(0, len(artists))
-        progress.set_detail("正在检查画师更新...")
+        task_id = progress.begin_task()
+        progress.begin_phase(task_id, "checking")
+        progress.set_artist_progress(task_id, 0, len(artists))
+        progress.set_detail(task_id, "正在检查画师更新...")
+
+        # ═══ Phase 1: 检查所有画师，记录需要下载的画师 ═══
+        to_download = []
 
         for i, artist in enumerate(artists):
-            progress.set_artist(artist.name)
-            progress.set_progress(i + 1, len(artists))
+            progress.set_artist(task_id, artist.name)
+            progress.set_artist_progress(task_id, i + 1, len(artists))
 
             try:
                 new_count = self._fetch_new_illusts(session, artist)
-                progress.add_found(new_count)
+                progress.add_found(task_id, new_count)
             except Exception as e:
-                progress.add_error(f"{artist.name}: {e}")
+                progress.add_error(task_id, f"{artist.name}: {e}")
                 new_count = 0
 
             self._update_file_paths(session, artist)
             self._convert_ugoira_zips(session, artist)
             session.commit()
-            missing = (
-                session.query(Illustration)
-                .filter_by(artist_id=artist.id)
-                .filter(Illustration.file_paths == None).count()
-            )
-            if new_count > 0 or missing > 0:
-                progress.set_detail(f"正在下载 {artist.name} 的作品...")
-                try:
-                    self._download_artist(artist.pixiv_user_id, clear_archive=(missing > 0))
-                    progress.add_downloaded(new_count or missing)
-                except Exception as e:
-                    progress.add_error(f"下载 {artist.name}: {e}")
 
-                self._update_file_paths(session, artist)
-                self._convert_ugoira_zips(session, artist)
             results[artist.name] = new_count
             artist.last_checked_at = datetime.utcnow()
 
-        session.commit()
-        session.close()
-        progress.finish()
-        return results
-
-    def download_pending(self):
-        """下载所有未下载的文件缺失的作品。"""
-        session = Session()
-        artists = session.query(TrackedArtist).filter_by(is_active=True).all()
-
-        progress.reset()
-        progress.begin_phase("downloading")
-        progress.set_progress(0, len(artists))
-
-        for i, artist in enumerate(artists):
-            self._update_file_paths(session, artist)
-            self._convert_ugoira_zips(session, artist)
-            session.commit()
-            missing = (
+            pending = (
                 session.query(Illustration)
                 .filter_by(artist_id=artist.id)
-                .filter(Illustration.file_paths == None).count()
+                .filter(Illustration.file_paths == None)
+                .all()
             )
-            if missing > 0:
-                progress.set_artist(artist.name)
-                progress.set_progress(i + 1, len(artists))
-                progress.set_detail(f"正在下载 {artist.name} 的作品...")
+            if pending:
+                to_download.append((artist, pending, new_count))
+
+        session.commit()
+
+        # ═══ Phase 2: 统一下载，逐文件更新进度 ═══
+        total_files = 0
+        download_plan = []
+        for artist, pending, new_count in to_download:
+            needs_clear = len(pending) > new_count
+            if needs_clear:
+                all_illusts = (
+                    session.query(Illustration)
+                    .filter_by(artist_id=artist.id).all()
+                )
+                artist_files = sum(i.page_count for i in all_illusts)
+            else:
+                artist_files = sum(i.page_count for i in pending)
+            total_files += artist_files
+            download_plan.append((artist, needs_clear))
+
+        if total_files > 0:
+            progress.begin_phase(task_id, "downloading")
+            progress.set_files_total(task_id, total_files)
+            progress.set_dl_artist_progress(task_id, 0, len(download_plan))
+
+            for i, (artist, needs_clear) in enumerate(download_plan):
+                progress.set_artist(task_id, artist.name)
+                progress.set_dl_artist_progress(task_id, i + 1, len(download_plan))
+                progress.set_detail(task_id, f"正在下载 {artist.name} 的作品...")
+
                 try:
-                    self._download_artist(artist.pixiv_user_id, clear_archive=True)
-                    progress.add_downloaded(missing)
+                    self._download_artist(
+                        artist.pixiv_user_id,
+                        artist_dir=str(_cfg.IMAGES_DIR / _artist_dir_name(artist)),
+                        task_id=task_id,
+                        clear_archive=needs_clear,
+                    )
                 except Exception as e:
-                    progress.add_error(f"下载 {artist.name}: {e}")
+                    progress.add_error(task_id, f"下载 {artist.name}: {e}")
 
                 self._update_file_paths(session, artist)
                 self._convert_ugoira_zips(session, artist)
-        session.commit()
+                session.commit()
+
         session.close()
-        progress.finish()
+        progress.finish_task(task_id)
+        return results
+
+    def download_pending(self):
+        """下载所有缺失文件的作品。先扫描全部画师，再统一下载。"""
+        session = Session()
+        artists = session.query(TrackedArtist).filter_by(is_active=True).all()
+
+        task_id = progress.begin_task()
+        progress.begin_phase(task_id, "checking")
+        progress.set_artist_progress(task_id, 0, len(artists))
+        progress.set_detail(task_id, "正在扫描缺失文件...")
+
+        # ═══ Phase 1: 扫描所有画师，收集待下载清单 ═══
+        to_download = []
+
+        for i, artist in enumerate(artists):
+            progress.set_artist(task_id, artist.name)
+            progress.set_artist_progress(task_id, i + 1, len(artists))
+
+            self._update_file_paths(session, artist)
+            self._convert_ugoira_zips(session, artist)
+            session.commit()
+
+            pending = (
+                session.query(Illustration)
+                .filter_by(artist_id=artist.id)
+                .filter(Illustration.file_paths == None)
+                .all()
+            )
+            if pending:
+                to_download.append((artist, pending))
+
+        # ═══ Phase 2: 统一下载，逐文件更新进度 ═══
+        total_files = 0
+        for artist, _ in to_download:
+            all_illusts = (
+                session.query(Illustration)
+                .filter_by(artist_id=artist.id).all()
+            )
+            total_files += sum(i.page_count for i in all_illusts)
+
+        if total_files > 0:
+            progress.begin_phase(task_id, "downloading")
+            progress.set_files_total(task_id, total_files)
+            progress.set_dl_artist_progress(task_id, 0, len(to_download))
+
+            for i, (artist, _) in enumerate(to_download):
+                progress.set_artist(task_id, artist.name)
+                progress.set_dl_artist_progress(task_id, i + 1, len(to_download))
+                progress.set_detail(task_id, f"正在下载 {artist.name} 的作品...")
+
+                try:
+                    self._download_artist(
+                        artist.pixiv_user_id,
+                        artist_dir=str(_cfg.IMAGES_DIR / _artist_dir_name(artist)),
+                        task_id=task_id,
+                        clear_archive=True,
+                    )
+                except Exception as e:
+                    progress.add_error(task_id, f"下载 {artist.name}: {e}")
+
+                self._update_file_paths(session, artist)
+                self._convert_ugoira_zips(session, artist)
+                session.commit()
+
+        session.close()
+        progress.finish_task(task_id)
 
     def _fetch_all_illusts(self, session, artist):
         count = 0
@@ -235,25 +334,65 @@ class Tracker:
         session.commit()
         return illust
 
-    def _download_artist(self, user_id, clear_archive=False):
-        """用 gallery-dl 下载画师的全部作品（auto-dedup）。"""
+    def _download_artist(self, user_id, artist_dir=None, task_id=None, clear_archive=False):
+        """用 gallery-dl 下载画师的全部作品（auto-dedup）。
+        若提供 artist_dir+task_id，会每秒轮询该目录新增文件数来更新下载进度。"""
         from .auth import configure_gallery_dl, _load_token
+        import threading
+        import time
+        from pathlib import Path
+
         saved = _load_token()
         if saved.get("refresh_token"):
             configure_gallery_dl(saved["refresh_token"])
 
-        # 如果文件被删了需要重新下载，先清除 archive 让 gallery-dl 不跳过
         if clear_archive:
             archive = _cfg.DATA_DIR / "gallery_dl_archive.db"
             if archive.exists():
                 archive.unlink()
 
         url = f"https://www.pixiv.net/users/{user_id}"
-        try:
-            job = gdl_job.DownloadJob(url)
-            job.run()
-        except Exception as e:
-            print(f"  [!] 下载出错 ({user_id}): {e}")
+
+        if artist_dir and task_id:
+            artist_dir = Path(artist_dir)
+            artist_dir.mkdir(parents=True, exist_ok=True)
+            before = {f.name for f in artist_dir.iterdir() if not f.name.endswith(".part")}
+            last_count = [0]
+            done = threading.Event()
+
+            def _dl():
+                try:
+                    job = gdl_job.DownloadJob(url)
+                    job.run()
+                except Exception as e:
+                    print(f"  [!] 下载出错 ({user_id}): {e}")
+                finally:
+                    done.set()
+
+            t = threading.Thread(target=_dl, daemon=True)
+            t.start()
+
+            while not done.wait(0.5):
+                if artist_dir.exists():
+                    current = {f.name for f in artist_dir.iterdir() if not f.name.endswith(".part")}
+                    new = len(current - before)
+                    if new > last_count[0]:
+                        progress.add_files_done(task_id, new - last_count[0])
+                        last_count[0] = new
+
+            t.join()
+
+            if artist_dir.exists():
+                current = {f.name for f in artist_dir.iterdir() if not f.name.endswith(".part")}
+                new = len(current - before)
+                if new > last_count[0]:
+                    progress.add_files_done(task_id, new - last_count[0])
+        else:
+            try:
+                job = gdl_job.DownloadJob(url)
+                job.run()
+            except Exception as e:
+                print(f"  [!] 下载出错 ({user_id}): {e}")
 
     def _convert_ugoira_zips(self, session, artist):
         """将画师目录下已下载的 ugoira ZIP 转换为 GIF。"""

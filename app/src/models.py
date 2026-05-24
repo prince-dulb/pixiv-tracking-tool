@@ -1,12 +1,22 @@
 from datetime import datetime
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, Text, ForeignKey
+from sqlalchemy import create_engine, event, Column, Integer, String, Boolean, DateTime, Text, ForeignKey
 from sqlalchemy.orm import DeclarativeBase, relationship, sessionmaker
 
 from .config import DATABASE_URL, DATA_DIR
 
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-engine = create_engine(DATABASE_URL, echo=False)
+engine = create_engine(DATABASE_URL, echo=False,
+                       connect_args={"check_same_thread": False})
+
+
+@event.listens_for(engine, "connect")
+def _set_sqlite_pragma(dbapi_connection, connection_record):
+    """WAL 模式 + 忙等超时，支持多线程并发写入。"""
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.execute("PRAGMA busy_timeout=5000")
+    cursor.close()
 
 
 def Session(**kw):
@@ -64,5 +74,7 @@ def reinit_db():
     engine.dispose()
     from .config import DATABASE_URL, DATA_DIR
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    engine = create_engine(DATABASE_URL, echo=False)
+    engine = create_engine(DATABASE_URL, echo=False,
+                           connect_args={"check_same_thread": False})
+    event.listens_for(engine, "connect")(_set_sqlite_pragma)
     Base.metadata.create_all(engine)

@@ -1,92 +1,164 @@
-"""线程安全的进度追踪模块。Tracker 写入，/api/progress 读取。"""
+"""线程安全的进度追踪模块。支持多任务并发——每个任务有独立 ID，API 返回聚合进度。"""
 import threading
+import uuid
 from dataclasses import dataclass, field
 
 
 @dataclass
-class _State:
-    phase: str = "idle"
+class _Task:
+    task_id: str
+    phase: str = "checking"
     current_artist: str = ""
     current_detail: str = ""
-    works_found: int = 0
-    works_downloaded: int = 0
+    artists_checked: int = 0
     total_artists: int = 0
-    artist_index: int = 0
+    new_works_found: int = 0
+    files_total: int = 0
+    files_done: int = 0
+    dl_artist_index: int = 0
+    dl_artist_total: int = 0
     errors: list = field(default_factory=list)
-    active: bool = False
 
 
-_state = _State()
+_tasks: dict[str, _Task] = {}
 _lock = threading.Lock()
 
 
-def reset():
+def begin_task(artist_name=""):
+    """开始一个新任务，返回 task_id。"""
+    task_id = uuid.uuid4().hex[:8]
     with _lock:
-        _state.phase = "idle"
-        _state.current_artist = ""
-        _state.current_detail = ""
-        _state.works_found = 0
-        _state.works_downloaded = 0
-        _state.total_artists = 0
-        _state.artist_index = 0
-        _state.errors.clear()
-        _state.active = True
+        _tasks[task_id] = _Task(task_id=task_id, current_artist=artist_name)
+    return task_id
 
 
-def begin_phase(phase):
+def begin_phase(task_id, phase):
     with _lock:
-        _state.phase = phase
+        if task_id in _tasks:
+            _tasks[task_id].phase = phase
 
 
-def set_artist(name):
+def set_artist(task_id, name):
     with _lock:
-        _state.current_artist = name
+        if task_id in _tasks:
+            _tasks[task_id].current_artist = name
 
 
-def set_detail(msg):
+def set_detail(task_id, msg):
     with _lock:
-        _state.current_detail = msg
+        if task_id in _tasks:
+            _tasks[task_id].current_detail = msg
 
 
-def set_progress(index, total):
+def set_artist_progress(task_id, checked, total):
     with _lock:
-        _state.artist_index = index
-        _state.total_artists = total
+        if task_id in _tasks:
+            t = _tasks[task_id]
+            t.artists_checked = checked
+            t.total_artists = total
 
 
-def add_found(n):
+def add_found(task_id, n):
     with _lock:
-        _state.works_found += n
+        if task_id in _tasks:
+            _tasks[task_id].new_works_found += n
 
 
-def add_downloaded(n):
+def set_files_total(task_id, n):
     with _lock:
-        _state.works_downloaded += n
+        if task_id in _tasks:
+            _tasks[task_id].files_total = n
 
 
-def add_error(msg):
+def add_files_done(task_id, n):
     with _lock:
-        _state.errors.append(msg)
-        if len(_state.errors) > 20:
-            _state.errors = _state.errors[-20:]
+        if task_id in _tasks:
+            _tasks[task_id].files_done += n
 
 
-def finish():
+def set_dl_artist_progress(task_id, index, total):
     with _lock:
-        _state.phase = "idle"
-        _state.active = False
+        if task_id in _tasks:
+            t = _tasks[task_id]
+            t.dl_artist_index = index
+            t.dl_artist_total = total
+
+
+def add_error(task_id, msg):
+    with _lock:
+        if task_id in _tasks:
+            t = _tasks[task_id]
+            t.errors.append(msg)
+            if len(t.errors) > 20:
+                t.errors = t.errors[-20:]
+
+
+def finish_task(task_id):
+    with _lock:
+        _tasks.pop(task_id, None)
 
 
 def get_state():
     with _lock:
+        if not _tasks:
+            return _empty_state()
+
+        tasks = list(_tasks.values())
+        downloading = [t for t in tasks if t.phase == "downloading"]
+        checking = [t for t in tasks if t.phase == "checking"]
+        all_phases = {t.phase for t in tasks}
+
+        # 阶段优先级：downloading > checking
+        if "downloading" in all_phases:
+            phase = "downloading"
+        elif "checking" in all_phases:
+            phase = "checking"
+        else:
+            phase = "idle"
+
+        # 取最近更新的任务的详情
+        last = tasks[-1]
+
+        # 文件进度只统计下载阶段的任务
+        dl_files_total = sum(t.files_total for t in downloading)
+        dl_files_done = sum(t.files_done for t in downloading)
+        dl_artist_idx = sum(t.dl_artist_index for t in downloading)
+        dl_artist_tot = sum(t.dl_artist_total for t in downloading)
+
+        # 画师进度只统计检查阶段的任务
+        chk_checked = sum(t.artists_checked for t in checking)
+        chk_total = sum(t.total_artists for t in checking)
+
         return {
-            "active": _state.active,
-            "phase": _state.phase,
-            "current_artist": _state.current_artist,
-            "current_detail": _state.current_detail,
-            "works_found": _state.works_found,
-            "works_downloaded": _state.works_downloaded,
-            "total_artists": _state.total_artists,
-            "artist_index": _state.artist_index,
-            "errors": list(_state.errors),
+            "active": True,
+            "phase": phase,
+            "current_artist": last.current_artist,
+            "current_detail": last.current_detail,
+            "artists_checked": chk_checked,
+            "total_artists": chk_total,
+            "new_works_found": sum(t.new_works_found for t in tasks),
+            "files_total": dl_files_total,
+            "files_done": dl_files_done,
+            "dl_artist_index": dl_artist_idx,
+            "dl_artist_total": dl_artist_tot,
+            "errors": [e for t in tasks for e in t.errors],
+            "task_count": len(tasks),
         }
+
+
+def _empty_state():
+    return {
+        "active": False,
+        "phase": "idle",
+        "current_artist": "",
+        "current_detail": "",
+        "artists_checked": 0,
+        "total_artists": 0,
+        "new_works_found": 0,
+        "files_total": 0,
+        "files_done": 0,
+        "dl_artist_index": 0,
+        "dl_artist_total": 0,
+        "errors": [],
+        "task_count": 0,
+    }

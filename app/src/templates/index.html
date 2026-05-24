@@ -3,15 +3,17 @@
 
 <div class="toolbar">
     <div class="toolbar-row">
-        <div class="filter-bar">
-            <span>画师：</span>
-            <a href="{{ all_url }}"
-               class="filter-tag {% if selected_artist_ids is none %}active{% endif %}">全部</a>
-            {% for a in artists %}
-            <a href="{{ toggle_urls[a.id] }}"
-               class="filter-tag {% if selected_artist_ids is none or a.id in selected_artist_ids %}active{% endif %}">{{ a.name }}</a>
-            {% endfor %}
-            <a href="{{ artist_invert_url }}" class="filter-tag" style="background:#333;border-color:#555;">反选</a>
+        <div class="filter-bar filter-bar-artists">
+            <span style="flex-shrink:0;">画师：</span>
+            <div class="filter-scroll">
+                <a href="{{ all_url }}"
+                   class="filter-tag {% if selected_artist_ids is none %}active{% endif %}">全部</a>
+                {% for a in artists %}
+                <a href="{{ toggle_urls[a.id] }}"
+                   class="filter-tag {% if selected_artist_ids is none or a.id in selected_artist_ids %}active{% endif %}">{{ a.name }}</a>
+                {% endfor %}
+            </div>
+            <a href="{{ artist_invert_url }}" class="filter-tag" style="background:#333;border-color:#555;flex-shrink:0;">反选</a>
         </div>
         <form method="post" action="/refresh" style="margin-left: auto;">
             {% if selected_artist_ids is not none %}
