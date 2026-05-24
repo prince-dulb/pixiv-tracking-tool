@@ -11,14 +11,14 @@
             <a href="{{ toggle_urls[a.id] }}"
                class="filter-tag {% if selected_artist_ids is none or a.id in selected_artist_ids %}active{% endif %}">{{ a.name }}</a>
             {% endfor %}
-            <a href="{{ invert_url }}" class="filter-tag" style="background:#333;border-color:#555;">反选</a>
+            <a href="{{ artist_invert_url }}" class="filter-tag" style="background:#333;border-color:#555;">反选</a>
         </div>
         <form method="post" action="/refresh" style="margin-left: auto;">
             {% if selected_artist_ids is not none %}
             <input type="hidden" name="artist_ids" value="{{ selected_artist_ids|join(',') }}">
             {% endif %}
-            {% if current_type %}
-            <input type="hidden" name="type" value="{{ current_type }}">
+            {% if selected_types is not none %}
+            <input type="hidden" name="types" value="{{ selected_types|join(',') }}">
             {% endif %}
             <button type="submit" class="btn-sm">刷新检查</button>
         </form>
@@ -26,10 +26,12 @@
     <div class="filter-bar" style="margin-top: 6px;">
         <span>类型：</span>
         <a href="{{ all_url }}"
-           class="filter-tag {% if not current_type %}active{% endif %}">全部</a>
+           class="filter-tag {% if selected_types is none %}active{% endif %}">全部</a>
         {% for t, label in type_labels.items() %}
-        <a href="{{ type_urls[t] }}" class="filter-tag {% if current_type == t %}active{% endif %}">{{ label }}</a>
+        <a href="{{ type_toggle_urls[t] }}"
+           class="filter-tag {% if selected_types is none or t in selected_types %}active{% endif %}">{{ label }}</a>
         {% endfor %}
+        <a href="{{ type_invert_url }}" class="filter-tag" style="background:#333;border-color:#555;">反选</a>
     </div>
 </div>
 
@@ -38,7 +40,7 @@
     {% for illust in illustrations %}
     <div class="illust-card">
         {% if illust.file_paths %}
-        <a href="/illust/{{ illust.id }}{% if selected_artist_ids or current_type %}?{% if selected_artist_ids %}artist_ids={{ selected_artist_ids|join(',') }}{% endif %}{% if selected_artist_ids and current_type %}&{% endif %}{% if current_type %}type={{ current_type }}{% endif %}{% endif %}">
+        <a href="/illust/{{ illust.id }}{% if selected_artist_ids is not none or selected_types is not none %}?{% if selected_artist_ids is not none %}artist_ids={{ selected_artist_ids|join(',') }}{% endif %}{% if selected_artist_ids is not none and selected_types is not none %}&{% endif %}{% if selected_types is not none %}types={{ selected_types|join(',') }}{% endif %}{% endif %}">
             <img src="{{ illust.file_paths.split(',')[0] }}"
                  alt="{{ illust.title }}"
                  loading="lazy"
