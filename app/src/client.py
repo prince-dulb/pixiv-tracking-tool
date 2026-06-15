@@ -34,6 +34,28 @@ class PixivClient:
     def _get(self, endpoint, params=None):
         return self._request(endpoint, params, retry_token=True)
 
+    def _do_get(self, endpoint, headers, params):
+        """带连接重试的 GET。"""
+        for attempt in range(3):
+            try:
+                r = self._do_get(endpoint, headers, params)
+                return r
+            except (requests.exceptions.SSLError, requests.exceptions.ConnectionError) as e:
+                if attempt == 2:
+                    raise
+                time.sleep(2 * (attempt + 1))
+
+    def _do_post(self, endpoint, headers, data):
+        """带连接重试的 POST。"""
+        for attempt in range(3):
+            try:
+                r = self._do_post(endpoint, headers, data)
+                return r
+            except (requests.exceptions.SSLError, requests.exceptions.ConnectionError) as e:
+                if attempt == 2:
+                    raise
+                time.sleep(2 * (attempt + 1))
+
     def _request(self, endpoint, params, retry_token):
         self._throttle()
 
@@ -44,12 +66,7 @@ class PixivClient:
         headers["App-Version"] = "7.19.1"
         headers["User-Agent"] = "PixivIOSApp/7.19.1 (iOS 16.7.2; iPhone14,2)"
 
-        r = requests.get(
-            f"{API_HOST}{endpoint}",
-            headers=headers,
-            params=params or {},
-            timeout=30,
-        )
+        r = self._do_get(endpoint, headers, params)
         data = r.json()
         if "error" not in data:
             return data
@@ -69,12 +86,7 @@ class PixivClient:
                 wait = 60 * (attempt + 1)
                 time.sleep(wait)
                 self._last_request = time.time()
-                r = requests.get(
-                    f"{API_HOST}{endpoint}",
-                    headers=headers,
-                    params=params or {},
-                    timeout=30,
-                )
+                r = self._do_get(endpoint, headers, params)
                 data = r.json()
                 if "error" not in data:
                     return data
@@ -94,12 +106,7 @@ class PixivClient:
         headers["User-Agent"] = "PixivIOSApp/7.19.1 (iOS 16.7.2; iPhone14,2)"
         headers["Content-Type"] = "application/x-www-form-urlencoded"
 
-        r = requests.post(
-            f"{API_HOST}{endpoint}",
-            headers=headers,
-            data=data or {},
-            timeout=30,
-        )
+        r = self._do_post(endpoint, headers, data)
         resp = r.json()
         if "error" not in resp:
             return resp
@@ -119,12 +126,7 @@ class PixivClient:
                 wait = 60 * (attempt + 1)
                 time.sleep(wait)
                 self._last_request = time.time()
-                r = requests.post(
-                    f"{API_HOST}{endpoint}",
-                    headers=headers,
-                    data=data or {},
-                    timeout=30,
-                )
+                r = self._do_post(endpoint, headers, data)
                 resp = r.json()
                 if "error" not in resp:
                     return resp
