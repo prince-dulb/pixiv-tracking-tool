@@ -69,7 +69,7 @@
         {% if tags %}
         <div class="detail-tags">
             {% for tag in tags %}
-            <span class="tag">{{ tag }}</span>
+            <a href="/?tags={{ tag | urlencode }}" class="tag">{{ tag }}</a>
             {% endfor %}
         </div>
         {% endif %}

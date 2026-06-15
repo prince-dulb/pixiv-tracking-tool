@@ -384,7 +384,8 @@ button:hover { opacity: 0.9; }
 .detail-title-row h2 { font-size: 18px; margin: 0; }
 .detail-meta { font-size: 13px; color: var(--text-dim); display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
 .detail-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
-.tag { display: inline-block; padding: 2px 8px; border-radius: 10px; background: #222; color: #aaa; font-size: 11px; }
+.tag { display: inline-block; padding: 2px 8px; border-radius: 10px; background: #222; color: #aaa; font-size: 11px; text-decoration: none; }
+.tag:hover { background: var(--accent); color: #fff; }
 
 /* 详情页导航 */
 .detail-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }

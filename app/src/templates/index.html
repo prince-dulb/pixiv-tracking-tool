@@ -46,6 +46,20 @@
             </div>
         </div>
 
+        <!-- 标签 -->
+        <div class="filter-section">
+            <button class="filter-section-title" data-section="tags">标签</button>
+            <div class="filter-section-body" id="section-tags" style="display:none;">
+                {% for tag in tag_list %}
+                <a href="{{ preserve_url(tags=tag) }}" class="filter-tag {% if tag in selected_tags %}active{% endif %}" data-tag="{{ tag }}">{{ tag }}</a>
+                {% endfor %}
+                <div style="width:100%;display:flex;gap:6px;margin-top:4px;">
+                    <input type="text" id="tag-input" placeholder="输入标签…" style="flex:1;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:4px;font-size:13px;">
+                    <button id="tag-add-btn" class="btn-sm">添加</button>
+                </div>
+            </div>
+        </div>
+
         <!-- 投稿期间 -->
         <div class="filter-section">
             <button class="filter-section-title {% if period %}open{% endif %}" data-section="period">投稿期间</button>
@@ -126,6 +140,8 @@
         }
         var period = params.get('period');
         parts.push('期间:' + (PERIOD_NAMES[period] || '不限'));
+        var tagsParam = params.get('tags');
+        if (tagsParam) parts.push('标签:' + tagsParam);
         if (params.get('show_hidden') === '1') parts.push('含已隐藏');
         document.querySelector('.filter-summary').textContent = parts.join(' · ');
     }
@@ -250,6 +266,25 @@
             else { p.set('show_hidden', '1'); }
             p.delete('fragment'); p.delete('offset');
             tag.setAttribute('href', '/?' + p.toString());
+        });
+
+        // ── 标签 tags ──
+        var selectedTags = tagsParam ? tagsParam.split(',') : [];
+        panel.querySelectorAll('#section-tags .filter-tag[data-tag]').forEach(function(tag) {
+            var t = tag.getAttribute('data-tag');
+            var isActive = selectedTags.indexOf(t) >= 0;
+            tag.classList.toggle('active', isActive);
+            // 更新 href：toggle 此 tag
+            var newTags;
+            if (isActive) {
+                newTags = selectedTags.filter(function(x) { return x !== t; });
+            } else {
+                newTags = selectedTags.concat([t]);
+            }
+            var p = new URLSearchParams(window.location.search);
+            if (newTags.length === 0) { p.delete('tags'); }
+            else { p.set('tags', newTags.join(',')); }
+            tag.setAttribute('href', buildUrl(p));
         });
     }
 
@@ -470,6 +505,66 @@
                     rebindBookmarks();
                     resetInfiniteScroll();
                     window.scrollTo({top: 0});
+                })
+                .catch(function() {
+                    if (spinner) spinner.style.display = 'none';
+                });
+        });
+    }
+
+    // 标签添加按钮
+    var tagAddBtn = document.getElementById('tag-add-btn');
+    if (tagAddBtn) {
+        tagAddBtn.addEventListener('click', function() {
+            var input = document.getElementById('tag-input');
+            var val = input.value.trim();
+            if (!val) return;
+            var params = new URLSearchParams(window.location.search);
+            var existing = params.get('tags');
+            var tags = existing ? existing.split(',') : [];
+            if (tags.indexOf(val) >= 0) { input.value = ''; return; }
+            tags.push(val);
+            params.set('tags', tags.join(','));
+            params.set('fragment', '1');
+            params.set('offset', '0');
+
+            var spinner = document.getElementById('load-spinner');
+            if (spinner) spinner.style.display = 'block';
+
+            fetch('/?' + params.toString())
+                .then(function(r) { return r.text(); })
+                .then(function(html) {
+                    if (spinner) spinner.style.display = 'none';
+                    html = html.trim();
+                    var galleryEl = document.querySelector('.gallery');
+                    var emptyEl = document.querySelector('.empty');
+                    if (html) {
+                        if (emptyEl) emptyEl.remove();
+                        if (!galleryEl) {
+                            galleryEl = document.createElement('div');
+                            galleryEl.className = 'gallery';
+                            document.getElementById('load-spinner').parentNode.insertBefore(galleryEl, document.getElementById('load-spinner'));
+                        }
+                        galleryEl.innerHTML = html;
+                        galleryEl.style.display = '';
+                    } else {
+                        if (galleryEl) galleryEl.style.display = 'none';
+                        if (!emptyEl) {
+                            emptyEl = document.createElement('div');
+                            emptyEl.className = 'empty';
+                            emptyEl.innerHTML = '<p>没有匹配的作品。</p>';
+                            document.getElementById('load-spinner').parentNode.insertBefore(emptyEl, document.getElementById('load-spinner'));
+                        }
+                    }
+                    params.delete('fragment');
+                    params.delete('offset');
+                    history.pushState({}, '', '/?' + params.toString());
+                    updateSummary();
+                    updateTagStates();
+                    rebindBookmarks();
+                    resetInfiniteScroll();
+                    window.scrollTo({top: 0});
+                    input.value = '';
                 })
                 .catch(function() {
                     if (spinner) spinner.style.display = 'none';

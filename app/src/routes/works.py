@@ -21,10 +21,13 @@ async def index(request: Request, artist_ids: str = Query(None), types: str = Qu
                 page: int = Query(None),
                 period: str = Query(None),
                 posted_after: str = Query(None),
-                posted_before: str = Query(None)):
+                posted_before: str = Query(None),
+                tags: str = Query(None)):
     show_hidden = show_hidden in ("1", "true")
     from .. import config as _cfg
     from datetime import datetime, timedelta
+    from sqlalchemy import or_
+    import json
 
     page_size = _cfg.PAGE_SIZE
     if page is not None and page > 0:
@@ -72,6 +75,14 @@ async def index(request: Request, artist_ids: str = Query(None), types: str = Qu
         if posted_before:
             query = query.filter(Illustration.posted_at <= posted_before + 'T23:59:59')
 
+    # Tag 筛选（OR 逻辑）
+    selected_tags = set()
+    if tags:
+        tag_list = [t.strip() for t in tags.split(",") if t.strip()]
+        selected_tags = set(tag_list)
+        conditions = [Illustration.tags.like(f'%"{tag}"%') for tag in tag_list]
+        query = query.filter(or_(*conditions))
+
     total_count = query.count()
     illustrations = query.offset(offset).limit(page_size).all()
     has_more = (offset + page_size) < total_count
@@ -80,6 +91,16 @@ async def index(request: Request, artist_ids: str = Query(None), types: str = Qu
     if illust_artist_ids:
         artists_list = session.query(TrackedArtist).filter(TrackedArtist.id.in_(illust_artist_ids)).all()
         artists_map = {a.id: a for a in artists_list}
+
+    # Tag 聚合（全部作品）
+    all_tags = set()
+    rows = session.query(Illustration.tags).all()
+    for (t,) in rows:
+        if t:
+            for tag in json.loads(t):
+                all_tags.add(tag)
+    tag_list_all = sorted(all_tags)
+
     session.close()
 
     def _period_params():
@@ -174,6 +195,7 @@ async def index(request: Request, artist_ids: str = Query(None), types: str = Qu
         if period: p['period'] = period
         if posted_after: p['posted_after'] = posted_after
         if posted_before: p['posted_before'] = posted_before
+        if tags: p['tags'] = tags
         for k, v in overrides.items():
             if v is None:
                 p.pop(k, None)
@@ -202,6 +224,8 @@ async def index(request: Request, artist_ids: str = Query(None), types: str = Qu
         filter_summary += ' · 期间:不限'
     if show_hidden:
         filter_summary += ' · 含已隐藏'
+    if selected_tags:
+        filter_summary += ' · 标签:' + ','.join(sorted(selected_tags))
 
     # Fragment 模式：仅返回卡片 HTML（AJAX 无限滚动）
     if fragment == "1":
@@ -248,7 +272,8 @@ async def index(request: Request, artist_ids: str = Query(None), types: str = Qu
          "posted_before": posted_before,
          "preserve_url": _preserve_url,
          "period_labels": period_labels,
-         "filter_summary": filter_summary},
+         "filter_summary": filter_summary,
+         "tag_list": tag_list_all, "selected_tags": selected_tags},
     )
 
 
@@ -425,10 +450,13 @@ async def artist_works(request: Request, artist_id: int, type: str = Query(None)
                        page: int = Query(None),
                        period: str = Query(None),
                        posted_after: str = Query(None),
-                       posted_before: str = Query(None)):
+                       posted_before: str = Query(None),
+                       tags: str = Query(None)):
     show_hidden = show_hidden in ("1", "true")
     from .. import config as _cfg
     from datetime import datetime, timedelta
+    from sqlalchemy import or_
+    import json
 
     page_size = _cfg.PAGE_SIZE
     if page is not None and page > 0:
@@ -468,9 +496,27 @@ async def artist_works(request: Request, artist_id: int, type: str = Query(None)
         if posted_before:
             query = query.filter(Illustration.posted_at <= posted_before + 'T23:59:59')
 
+    # Tag 筛选（OR 逻辑）
+    selected_tags = set()
+    if tags:
+        tag_list = [t.strip() for t in tags.split(",") if t.strip()]
+        selected_tags = set(tag_list)
+        conditions = [Illustration.tags.like(f'%"{tag}"%') for tag in tag_list]
+        query = query.filter(or_(*conditions))
+
     total_count = query.count()
     illustrations = query.offset(offset).limit(page_size).all()
     has_more = (offset + page_size) < total_count
+
+    # Tag 聚合（该画师的作品）
+    all_tags = set()
+    rows = session.query(Illustration.tags).filter_by(artist_id=artist_id).all()
+    for (t,) in rows:
+        if t:
+            for tag in json.loads(t):
+                all_tags.add(tag)
+    tag_list_all = sorted(all_tags)
+
     session.close()
 
     # 通用 URL 构建器
@@ -481,6 +527,7 @@ async def artist_works(request: Request, artist_id: int, type: str = Query(None)
         if period: p['period'] = period
         if posted_after: p['posted_after'] = posted_after
         if posted_before: p['posted_before'] = posted_before
+        if tags: p['tags'] = tags
         for k, v in overrides.items():
             if v is None:
                 p.pop(k, None)
@@ -502,6 +549,8 @@ async def artist_works(request: Request, artist_id: int, type: str = Query(None)
         filter_summary += ' · 期间:不限'
     if show_hidden:
         filter_summary += ' · 含已隐藏'
+    if selected_tags:
+        filter_summary += ' · 标签:' + ','.join(sorted(selected_tags))
 
     # Fragment 模式：仅返回卡片 HTML（AJAX 无限滚动）
     if fragment == "1":
@@ -555,7 +604,8 @@ async def artist_works(request: Request, artist_id: int, type: str = Query(None)
          "posted_before": posted_before,
          "preserve_url": _preserve_url,
          "period_labels": period_labels,
-         "filter_summary": filter_summary},
+         "filter_summary": filter_summary,
+         "tag_list": tag_list_all, "selected_tags": selected_tags},
     )
 
 
