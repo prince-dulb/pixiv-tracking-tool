@@ -38,9 +38,14 @@ class PixivClient:
         """带连接重试的 GET。"""
         for attempt in range(3):
             try:
-                r = self._do_get(endpoint, headers, params)
+                r = requests.get(
+                    f"{API_HOST}{endpoint}",
+                    headers=headers,
+                    params=params or {},
+                    timeout=30,
+                )
                 return r
-            except (requests.exceptions.SSLError, requests.exceptions.ConnectionError) as e:
+            except (requests.exceptions.SSLError, requests.exceptions.ConnectionError):
                 if attempt == 2:
                     raise
                 time.sleep(2 * (attempt + 1))
@@ -49,9 +54,14 @@ class PixivClient:
         """带连接重试的 POST。"""
         for attempt in range(3):
             try:
-                r = self._do_post(endpoint, headers, data)
+                r = requests.post(
+                    f"{API_HOST}{endpoint}",
+                    headers=headers,
+                    data=data or {},
+                    timeout=30,
+                )
                 return r
-            except (requests.exceptions.SSLError, requests.exceptions.ConnectionError) as e:
+            except (requests.exceptions.SSLError, requests.exceptions.ConnectionError):
                 if attempt == 2:
                     raise
                 time.sleep(2 * (attempt + 1))
