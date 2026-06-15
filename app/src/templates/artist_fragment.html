@@ -1,0 +1,34 @@
+{% for illust in illustrations %}
+<div class="illust-card {% if illust.is_hidden %}card-hidden{% endif %}">
+    <div class="thumb-container">
+        {% if illust.file_paths %}
+        <a href="/illust/{{ illust.id }}?artist_id={{ artist.id }}{% if current_type %}&type={{ current_type }}{% endif %}{% if show_hidden %}&show_hidden=1{% endif %}">
+            <img src="{{ illust.file_paths.split(',')[0] }}"
+                 alt="{{ illust.title }}"
+                 loading="lazy"
+                 class="illust-thumb"
+                 onerror="this.src='/static/placeholder.svg'">
+        </a>
+        {% else %}
+        <div class="illust-thumb placeholder"></div>
+        {% endif %}
+        <button class="card-bookmark-btn{% if illust.is_bookmarked %} bookmarked{% endif %}"
+                data-illust-id="{{ illust.id }}"
+                title="{{ '取消收藏' if illust.is_bookmarked else '收藏' }}">
+            {{ '♥' if illust.is_bookmarked else '♡' }}
+        </button>
+    </div>
+    <div class="illust-info">
+        <div class="illust-title" title="{{ illust.title }}">{{ illust.title }}</div>
+        <div class="illust-meta">
+            <span>{{ illust.posted_at.strftime('%Y-%m-%d') if illust.posted_at else '' }}</span>
+            <span>♥ {{ illust.bookmark_count or 0 }}</span>
+        </div>
+        <div class="illust-badges">
+            <span class="badge type-badge">{{ type_labels.get(illust.type, illust.type) }}</span>
+            {% if illust.page_count > 1 %}<span class="badge">{{ illust.page_count }}P</span>{% endif %}
+            {% if illust.is_hidden %}<span class="badge" style="background:var(--danger);">已隐藏</span>{% endif %}
+        </div>
+    </div>
+</div>
+{% endfor %}

@@ -117,6 +117,18 @@ async def api_submit_code(data: dict):
     return JSONResponse({"ok": True})
 
 
+@app.post("/api/sync-bookmarks")
+async def api_sync_bookmarks():
+    """一次性全量同步所有活跃画师作品的收藏状态。在后台线程运行。"""
+    from fastapi.responses import JSONResponse
+    import threading
+    global tracker
+    if not tracker:
+        return JSONResponse({"ok": False, "error": "未登录 Pixiv"}, status_code=503)
+    threading.Thread(target=tracker.sync_all_bookmarks, daemon=True).start()
+    return JSONResponse({"ok": True})
+
+
 # 动态服务图片文件（支持自定义路径）
 @app.get("/images/{path:path}")
 async def serve_image(path: str):

@@ -375,6 +375,146 @@ button:hover { opacity: 0.9; }
     border-radius: 4px;
 }
 
+/* 隐藏作品标记 */
+.card-hidden { opacity: 0.5; border: 1px dashed var(--danger); }
+.card-hidden:hover { opacity: 0.8; }
+
+/* 详情页操作栏 */
+.detail-actions { display: flex; gap: 8px; margin-bottom: 16px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); }
+
+/* Toast 通知 */
+#toast-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+.toast {
+    padding: 10px 24px;
+    border-radius: var(--radius);
+    font-size: 14px;
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    white-space: nowrap;
+}
+.toast-visible { opacity: 1; }
+.toast-success { border-color: var(--ok); }
+.toast-error { border-color: var(--danger); }
+.toast-info { border-color: var(--accent); }
+
+/* 卡片收藏角标 */
+.thumb-container { position: relative; }
+.card-bookmark-btn {
+    position: absolute;
+    bottom: 6px;
+    right: 6px;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.45);
+    border: none;
+    color: #fff;
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.65;
+    transition: opacity 0.2s, transform 0.15s, background 0.2s;
+    z-index: 5;
+    padding: 0;
+    line-height: 1;
+}
+.illust-card:hover .card-bookmark-btn { opacity: 0.9; }
+.card-bookmark-btn:hover { opacity: 1 !important; transform: scale(1.18); background: rgba(0,0,0,0.65); }
+.card-bookmark-btn.bookmarked {
+    opacity: 1;
+    color: var(--danger);
+}
+
+/* 详情页图片流收藏角标 */
+.page-viewer { position: relative; }
+.page-viewer-bookmark {
+    position: absolute;
+    bottom: 16px;
+    right: 16px;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.4);
+    border: none;
+    color: #fff;
+    font-size: 22px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.55;
+    transition: opacity 0.2s, transform 0.15s, background 0.2s;
+    z-index: 10;
+    padding: 0;
+    line-height: 1;
+}
+.page-viewer-bookmark:hover { opacity: 1; transform: scale(1.15); background: rgba(0,0,0,0.6); }
+.page-viewer-bookmark.bookmarked {
+    opacity: 1;
+    color: var(--danger);
+}
+
+/* 页码栏 */
+.pagination {
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+    margin: 24px 0;
+}
+.pagination a {
+    padding: 6px 12px;
+    background: var(--surface);
+    border-radius: 4px;
+    color: var(--text);
+    text-decoration: none;
+    font-size: 13px;
+}
+.pagination a.active { background: var(--accent); color: #fff; }
+.pagination a:hover { opacity: 0.8; }
+.pagination .page-gap { padding: 6px 4px; color: var(--text-dim); }
+
+/* 加载指示器 */
+.load-spinner {
+    text-align: center;
+    padding: 20px;
+    color: var(--text-dim);
+    font-size: 13px;
+}
+
+/* 回到顶部 */
+.back-to-top {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    z-index: 200;
+    font-size: 18px;
+    display: none;
+    opacity: 0.8;
+    transition: opacity 0.2s;
+    padding: 0;
+    line-height: 40px;
+    text-align: center;
+}
+.back-to-top:hover { opacity: 1; }
+
 /* 移动端适配 */
 @media (max-width: 640px) {
     .gallery { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }

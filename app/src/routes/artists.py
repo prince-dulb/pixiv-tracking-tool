@@ -92,6 +92,22 @@ async def remove_artist(artist_id: int):
     return RedirectResponse("/artists", status_code=303)
 
 
+@router.post("/{artist_id}/remove-keep-files")
+async def remove_artist_keep_files(artist_id: int):
+    tracker = get_tracker()
+    if tracker:
+        tracker.remove_artist_keep_files(artist_id)
+    return RedirectResponse("/artists", status_code=303)
+
+
+@router.post("/{artist_id}/remove-and-files")
+async def remove_artist_and_files(artist_id: int):
+    tracker = get_tracker()
+    if tracker:
+        tracker.remove_artist_and_files(artist_id)
+    return RedirectResponse("/artists", status_code=303)
+
+
 @router.post("/{artist_id}/toggle")
 async def toggle_artist(artist_id: int):
     session = Session()
@@ -148,7 +164,10 @@ def _do_refresh_artist(tracker, artist_id):
         progress.set_dl_artist_progress(task_id, 1, 1)
         progress.set_detail(task_id, f"正在下载 {artist.name} 的作品...")
 
-        artist_dir = str(_cfg.IMAGES_DIR / f"{artist.name} {artist.pixiv_user_id}")
+        safe_name = artist.name
+        for ch in r'\/:*?"<>|':
+            safe_name = safe_name.replace(ch, '_')
+        artist_dir = str(_cfg.IMAGES_DIR / f"{safe_name} {artist.pixiv_user_id}")
 
         try:
             tracker._download_artist(

@@ -193,3 +193,8 @@ CHECK_INTERVAL_MINUTES = int(os.getenv("CHECK_INTERVAL_MINUTES", "0")) or None
 # Download
 DOWNLOAD_WORKERS = int(os.getenv("DOWNLOAD_WORKERS", "3"))
 REQUEST_DELAY = float(os.getenv("REQUEST_DELAY", "1.0"))
+
+# 翻页设置
+PAGE_SIZE = int(os.getenv("PAGE_SIZE", "200"))
+PAGINATION_MODE = os.getenv("PAGINATION_MODE", "scroll")  # "scroll" | "paginate"
+MAX_VISIBLE_ITEMS = int(os.getenv("MAX_VISIBLE_ITEMS", "0"))  # 0 = 不限

@@ -15,7 +15,17 @@ def _ids_str(ids_set):
 
 
 @router.get("/")
-async def index(request: Request, artist_ids: str = Query(None), types: str = Query(None)):
+async def index(request: Request, artist_ids: str = Query(None), types: str = Query(None),
+                show_hidden: str = Query(None),
+                offset: int = Query(0), fragment: str = Query(None),
+                page: int = Query(None)):
+    show_hidden = show_hidden in ("1", "true")
+    from .. import config as _cfg
+
+    page_size = _cfg.PAGE_SIZE
+    if page is not None and page > 0:
+        offset = (page - 1) * page_size
+
     session = Session()
     all_artists = session.query(TrackedArtist).filter_by(is_active=True).order_by(TrackedArtist.name).all()
     all_artist_ids = {a.id for a in all_artists}
@@ -37,8 +47,12 @@ async def index(request: Request, artist_ids: str = Query(None), types: str = Qu
         query = query.filter(Illustration.artist_id.in_(selected_ids))
     if selected_types is not None:
         query = query.filter(Illustration.type.in_(selected_types))
+    if not show_hidden:
+        query = query.filter(Illustration.is_hidden != True)
 
-    illustrations = query.limit(200).all()
+    total_count = query.count()
+    illustrations = query.offset(offset).limit(page_size).all()
+    has_more = (offset + page_size) < total_count
     illust_artist_ids = {i.artist_id for i in illustrations}
     artists_map = {}
     if illust_artist_ids:
@@ -104,6 +118,43 @@ async def index(request: Request, artist_ids: str = Query(None), types: str = Qu
 
     all_url = _index_url()
 
+    # "显示已隐藏" toggle URL
+    def _show_hidden_toggle_url():
+        parts = []
+        if artist_ids:
+            parts.append(f"artist_ids={artist_ids}")
+        if types:
+            parts.append(f"types={types}")
+        if not show_hidden:
+            parts.append("show_hidden=1")
+        qs = "&".join(parts)
+        return "/?" + qs if qs else "/"
+    show_hidden_toggle_url = _show_hidden_toggle_url()
+
+    # Fragment 模式：仅返回卡片 HTML（AJAX 无限滚动）
+    if fragment == "1":
+        from starlette.responses import HTMLResponse
+        resp = templates.TemplateResponse(request, "gallery_fragment.html", {
+            "illustrations": illustrations,
+            "artists_map": artists_map,
+            "type_labels": TYPE_LABELS,
+            "show_hidden": show_hidden,
+            "selected_artist_ids": selected_ids,
+            "selected_types": selected_types,
+        })
+        resp.headers["X-Has-More"] = "1" if has_more else "0"
+        session.close()
+        return resp
+
+    # 页码计算（模式 A）
+    import math
+    current_page = (offset // page_size) + 1 if page_size > 0 else 1
+    total_pages = max(1, math.ceil(total_count / page_size))
+    # 页码窗口：当前页前后各 3 页
+    p_start = max(1, current_page - 3)
+    p_end = min(total_pages, current_page + 3)
+    page_range = list(range(p_start, p_end + 1))
+
     return templates.TemplateResponse(
         request, "index.html",
         {"illustrations": illustrations, "artists": all_artists,
@@ -112,14 +163,21 @@ async def index(request: Request, artist_ids: str = Query(None), types: str = Qu
          "toggle_urls": toggle_urls, "type_toggle_urls": type_toggle_urls,
          "artist_invert_url": artist_invert_url, "type_invert_url": type_invert_url,
          "all_url": all_url, "selected_types": selected_types,
-         "type_labels": TYPE_LABELS},
+         "type_labels": TYPE_LABELS,
+         "show_hidden": show_hidden,
+         "show_hidden_toggle_url": show_hidden_toggle_url,
+         "offset": offset, "page_size": page_size,
+         "total_count": total_count, "has_more": has_more,
+         "pagination_mode": _cfg.PAGINATION_MODE,
+         "current_page": current_page, "total_pages": total_pages,
+         "page_range": page_range},
     )
 
 
 @router.get("/illust/{illust_id}")
 async def illust_detail(request: Request, illust_id: int,
                          artist_ids: str = Query(None), artist_id: int = Query(None),
-                         types: str = Query(None)):
+                         types: str = Query(None), show_hidden: str = Query(None)):
     session = Session()
     illust = session.query(Illustration).get(illust_id)
     if not illust:
@@ -181,6 +239,8 @@ async def illust_detail(request: Request, illust_id: int,
         params.append(f"artist_id={artist_id}")
     if types:
         params.append(f"types={types}")
+    if show_hidden in ("1", "true"):
+        params.append("show_hidden=1")
     nav_query = "?" + "&".join(params) if params else ""
 
     if artist_id:
@@ -275,12 +335,23 @@ async def illust_detail(request: Request, illust_id: int,
          "detail_toggle_urls": detail_toggle_urls, "detail_type_urls": detail_type_urls,
          "artist_invert_url": artist_invert_url, "type_invert_url": type_invert_url,
          "all_url": all_url,
-         "type_labels": TYPE_LABELS},
+         "type_labels": TYPE_LABELS,
+         "show_hidden": show_hidden in ("1", "true")},
     )
 
 
 @router.get("/artist/{artist_id}")
-async def artist_works(request: Request, artist_id: int, type: str = Query(None)):
+async def artist_works(request: Request, artist_id: int, type: str = Query(None),
+                       show_hidden: str = Query(None),
+                       offset: int = Query(0), fragment: str = Query(None),
+                       page: int = Query(None)):
+    show_hidden = show_hidden in ("1", "true")
+    from .. import config as _cfg
+
+    page_size = _cfg.PAGE_SIZE
+    if page is not None and page > 0:
+        offset = (page - 1) * page_size
+
     session = Session()
     artist = session.query(TrackedArtist).get(artist_id)
     if not artist:
@@ -294,14 +365,55 @@ async def artist_works(request: Request, artist_id: int, type: str = Query(None)
     )
     if type and type in TYPE_LABELS:
         query = query.filter_by(type=type)
+    if not show_hidden:
+        query = query.filter(Illustration.is_hidden != True)
 
-    illustrations = query.limit(200).all()
+    total_count = query.count()
+    illustrations = query.offset(offset).limit(page_size).all()
+    has_more = (offset + page_size) < total_count
     session.close()
+
+    # Fragment 模式：仅返回卡片 HTML（AJAX 无限滚动）
+    if fragment == "1":
+        from starlette.responses import HTMLResponse
+        resp = templates.TemplateResponse(request, "artist_fragment.html", {
+            "artist": artist, "illustrations": illustrations,
+            "type_labels": TYPE_LABELS, "current_type": type,
+            "show_hidden": show_hidden,
+        })
+        resp.headers["X-Has-More"] = "1" if has_more else "0"
+        return resp
+
+    # 构建 show_hidden toggle URL
+    def _toggle_url(target_show):
+        parts = []
+        if type and type in TYPE_LABELS:
+            parts.append(f"type={type}")
+        if target_show:
+            parts.append("show_hidden=1")
+        qs = "&".join(parts)
+        return f"/artist/{artist_id}?{qs}" if qs else f"/artist/{artist_id}"
+    show_hidden_toggle_url = _toggle_url(not show_hidden)
+
+    # 页码计算（模式 A）
+    import math
+    current_page = (offset // page_size) + 1 if page_size > 0 else 1
+    total_pages = max(1, math.ceil(total_count / page_size))
+    p_start = max(1, current_page - 3)
+    p_end = min(total_pages, current_page + 3)
+    page_range = list(range(p_start, p_end + 1))
 
     return templates.TemplateResponse(
         request, "artist_works.html",
         {"artist": artist, "illustrations": illustrations,
-         "type_labels": TYPE_LABELS, "current_type": type},
+         "type_labels": TYPE_LABELS, "current_type": type,
+         "show_hidden": show_hidden,
+         "show_hidden_toggle_url": show_hidden_toggle_url,
+         "offset": offset, "page_size": page_size,
+         "total_count": total_count, "has_more": has_more,
+         "pagination_mode": _cfg.PAGINATION_MODE,
+         "current_page": current_page, "total_pages": total_pages,
+         "page_range": page_range},
     )
 
 
@@ -317,6 +429,73 @@ async def refresh_all(artist_ids: str = Form(None), types: str = Form(None)):
         params.append(f"types={types}")
     url = "/?" + "&".join(params) if params else "/"
     return RedirectResponse(url, status_code=303)
+
+
+@router.post("/illust/{illust_id}/hide")
+async def hide_illust(illust_id: int, redirect_url: str = Form("/")):
+    session = Session()
+    illust = session.query(Illustration).get(illust_id)
+    if illust:
+        illust.is_hidden = True
+        session.commit()
+    session.close()
+    if not redirect_url.startswith("/"):
+        redirect_url = "/"
+    return RedirectResponse(redirect_url, status_code=303)
+
+
+@router.post("/illust/{illust_id}/unhide")
+async def unhide_illust(illust_id: int, redirect_url: str = Form("/")):
+    session = Session()
+    illust = session.query(Illustration).get(illust_id)
+    if illust:
+        illust.is_hidden = False
+        session.commit()
+    session.close()
+    if not redirect_url.startswith("/"):
+        redirect_url = "/"
+    return RedirectResponse(redirect_url, status_code=303)
+
+
+@router.post("/illust/{illust_id}/delete")
+async def delete_illust(illust_id: int, redirect_url: str = Form("/")):
+    tracker = get_tracker()
+    if tracker:
+        tracker.permanently_delete_illust(illust_id)
+    if not redirect_url.startswith("/"):
+        redirect_url = "/"
+    return RedirectResponse(redirect_url, status_code=303)
+
+
+@router.post("/illust/{illust_id}/bookmark")
+async def toggle_bookmark(illust_id: int):
+    from fastapi.responses import JSONResponse
+    tracker = get_tracker()
+    if not tracker:
+        return JSONResponse({"ok": False, "error": "未登录 Pixiv"}, status_code=503)
+
+    session = Session()
+    illust = session.query(Illustration).get(illust_id)
+    if not illust:
+        session.close()
+        return JSONResponse({"ok": False, "error": "作品不存在"}, status_code=404)
+
+    try:
+        if illust.is_bookmarked:
+            tracker.client.delete_bookmark(illust.pixiv_illust_id)
+            illust.is_bookmarked = False
+        else:
+            tracker.client.add_bookmark(illust.pixiv_illust_id, restrict="public")
+            illust.is_bookmarked = True
+        session.commit()
+        result = {"ok": True, "is_bookmarked": illust.is_bookmarked}
+    except Exception as e:
+        session.rollback()
+        result = {"ok": False, "error": str(e)}
+    finally:
+        session.close()
+
+    return JSONResponse(result, status_code=200 if result["ok"] else 500)
 
 
 def _do_refresh_all(tracker):

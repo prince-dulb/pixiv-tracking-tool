@@ -10,3 +10,4 @@ dist/
 test_images
 test_images/
 .superpowers/
+pixiv_token.json

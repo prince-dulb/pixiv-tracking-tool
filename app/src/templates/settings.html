@@ -109,6 +109,31 @@ document.getElementById('change-path-form').addEventListener('submit', e => {
 </div>
 
 <div class="settings-section">
+    <h3>收藏状态同步</h3>
+    <p>从 Pixiv 服务器同步所有已下载作品的收藏状态。此操作在后台运行，可能需要几分钟。</p>
+    <form method="post" action="/settings/sync-bookmarks">
+        <button type="submit">同步收藏状态</button>
+    </form>
+</div>
+
+<div class="settings-section">
+    <h3>画廊翻页</h3>
+    <form method="post" action="/settings/pagination" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <select name="pagination_mode" style="padding:6px 10px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px;">
+            <option value="scroll" {% if pagination_mode == 'scroll' %}selected{% endif %}>无限滚动</option>
+            <option value="paginate" {% if pagination_mode == 'paginate' %}selected{% endif %}>页码翻页</option>
+        </select>
+        <select name="page_size" style="padding:6px 10px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px;">
+            <option value="50" {% if page_size == 50 %}selected{% endif %}>50 件/页</option>
+            <option value="100" {% if page_size == 100 %}selected{% endif %}>100 件/页</option>
+            <option value="200" {% if page_size == 200 %}selected{% endif %}>200 件/页</option>
+            <option value="500" {% if page_size == 500 %}selected{% endif %}>500 件/页</option>
+        </select>
+        <button type="submit">保存</button>
+    </form>
+</div>
+
+<div class="settings-section">
     <h3>访问地址</h3>
     <p>服务运行在端口 {{ port }}。同一网络下的设备可通过以下地址访问：</p>
     <code>http://&lt;本机IP&gt;:{{ port }}</code>

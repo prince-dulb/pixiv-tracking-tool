@@ -9,7 +9,8 @@ router = APIRouter(prefix="/settings", tags=["settings"])
 
 
 def _settings_context():
-    from ..config import CHECK_INTERVAL_HOURS, CHECK_INTERVAL_MINUTES, PORT, DATA_ROOT
+    from ..config import CHECK_INTERVAL_HOURS, CHECK_INTERVAL_MINUTES, PORT, DATA_ROOT, \
+        PAGE_SIZE, PAGINATION_MODE, MAX_VISIBLE_ITEMS
     session = Session()
     artist_count = session.query(TrackedArtist).count()
     illust_count = session.query(Illustration).count()
@@ -23,6 +24,9 @@ def _settings_context():
         "check_interval_minutes": CHECK_INTERVAL_MINUTES,
         "port": PORT,
         "data_root": str(DATA_ROOT),
+        "page_size": PAGE_SIZE,
+        "pagination_mode": PAGINATION_MODE,
+        "max_visible_items": MAX_VISIBLE_ITEMS,
     }
 
 
@@ -76,6 +80,50 @@ async def change_path(request: Request, new_path: str = Form(...)):
         return JSONResponse({"error": f"迁移失败: {e}"})
 
     return JSONResponse({"ok": True})
+
+
+@router.post("/sync-bookmarks")
+async def sync_bookmarks():
+    """全量同步所有已下载作品的收藏状态。后台运行。"""
+    import threading
+    tracker = get_tracker()
+    if tracker:
+        threading.Thread(target=tracker.sync_all_bookmarks, daemon=True).start()
+    return RedirectResponse("/settings", status_code=303)
+
+
+@router.post("/pagination")
+async def update_pagination(page_size: int = Form(200), pagination_mode: str = Form("scroll"),
+                            max_visible_items: int = Form(0)):
+    """更新翻页设置并持久化到 .env。"""
+    from .. import config as _cfg
+    from ..config import env_file
+
+    # 更新运行时配置
+    _cfg.PAGE_SIZE = page_size
+    _cfg.PAGINATION_MODE = pagination_mode
+    _cfg.MAX_VISIBLE_ITEMS = max_visible_items
+
+    # 持久化到 .env
+    content = env_file.read_text(encoding='utf-8')
+    lines = content.split('\n')
+    new_lines = []
+    updated = {"PAGE_SIZE": False, "PAGINATION_MODE": False, "MAX_VISIBLE_ITEMS": False}
+    for line in lines:
+        stripped = line.strip()
+        for key in updated:
+            if stripped.startswith(f"{key}="):
+                new_lines.append(f"{key}={locals()[key.lower()]}")
+                updated[key] = True
+                break
+        else:
+            new_lines.append(line)
+    for key, done in updated.items():
+        if not done:
+            new_lines.append(f"{key}={locals()[key.lower()]}")
+    env_file.write_text('\n'.join(new_lines), encoding='utf-8')
+
+    return RedirectResponse("/settings", status_code=303)
 
 
 @router.post("/browse-path")

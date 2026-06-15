@@ -1,4 +1,6 @@
 import json
+import threading
+import time
 import requests
 from pathlib import Path
 
@@ -10,6 +12,7 @@ def _token_file():
     return _cfg.DATA_DIR / "pixiv_token.json"
 
 API_HOST = "https://app-api.pixiv.net"
+_MIN_INTERVAL = 1.0  # 请求最小间隔（秒）
 
 
 def _get_auth_header():
@@ -22,10 +25,18 @@ def _get_auth_header():
 
 
 class PixivClient:
+    _last_request = 0.0
+    _lock = threading.Lock()
+
     def __init__(self):
         pass
 
     def _get(self, endpoint, params=None):
+        return self._request(endpoint, params, retry_token=True)
+
+    def _request(self, endpoint, params, retry_token):
+        self._throttle()
+
         headers = _get_auth_header()
         headers["Accept-Language"] = "zh-cn"
         headers["App-OS"] = "ios"
@@ -40,9 +51,105 @@ class PixivClient:
             timeout=30,
         )
         data = r.json()
-        if "error" in data:
-            raise RuntimeError(f"API error: {data['error']}")
-        return data
+        if "error" not in data:
+            return data
+
+        err_msg = str(data["error"])
+        err_lower = err_msg.lower()
+
+        # token 过期——刷新后续期重试一次
+        if retry_token and ("invalid_grant" in err_msg or "oauth" in err_lower):
+            from .auth import _try_refresh_token
+            if _try_refresh_token():
+                return self._request(endpoint, params, retry_token=False)
+
+        # 限流——等待后重试（最多 3 次）
+        if "rate" in err_lower:
+            for attempt in range(3):
+                wait = 60 * (attempt + 1)
+                time.sleep(wait)
+                self._last_request = time.time()
+                r = requests.get(
+                    f"{API_HOST}{endpoint}",
+                    headers=headers,
+                    params=params or {},
+                    timeout=30,
+                )
+                data = r.json()
+                if "error" not in data:
+                    return data
+                err_msg = str(data["error"])
+
+        raise RuntimeError(f"API error: {data['error']}")
+
+    def _post(self, endpoint, data=None, retry_token=True):
+        """带节流的 POST 请求（用于收藏等写操作）。"""
+        self._throttle()
+
+        headers = _get_auth_header()
+        headers["Accept-Language"] = "zh-cn"
+        headers["App-OS"] = "ios"
+        headers["App-OS-Version"] = "16.7.2"
+        headers["App-Version"] = "7.19.1"
+        headers["User-Agent"] = "PixivIOSApp/7.19.1 (iOS 16.7.2; iPhone14,2)"
+        headers["Content-Type"] = "application/x-www-form-urlencoded"
+
+        r = requests.post(
+            f"{API_HOST}{endpoint}",
+            headers=headers,
+            data=data or {},
+            timeout=30,
+        )
+        resp = r.json()
+        if "error" not in resp:
+            return resp
+
+        err_msg = str(resp["error"])
+        err_lower = err_msg.lower()
+
+        # token 过期——刷新后续期重试一次
+        if retry_token and ("invalid_grant" in err_msg or "oauth" in err_lower):
+            from .auth import _try_refresh_token
+            if _try_refresh_token():
+                return self._post(endpoint, data, retry_token=False)
+
+        # 限流——等待后重试（最多 3 次）
+        if "rate" in err_lower:
+            for attempt in range(3):
+                wait = 60 * (attempt + 1)
+                time.sleep(wait)
+                self._last_request = time.time()
+                r = requests.post(
+                    f"{API_HOST}{endpoint}",
+                    headers=headers,
+                    data=data or {},
+                    timeout=30,
+                )
+                resp = r.json()
+                if "error" not in resp:
+                    return resp
+
+        raise RuntimeError(f"API error: {resp['error']}")
+
+    def add_bookmark(self, illust_id, restrict="public"):
+        """收藏作品。restrict: 'public'=公开, 'private'=私有。"""
+        return self._post("/v2/illust/bookmark/add",
+                          {"illust_id": illust_id, "restrict": restrict})
+
+    def delete_bookmark(self, illust_id):
+        """取消收藏。"""
+        return self._post("/v1/illust/bookmark/delete",
+                          {"illust_id": illust_id})
+
+    @classmethod
+    def _throttle(cls):
+        """线程安全的请求节流——确保两次请求至少间隔 _MIN_INTERVAL 秒。"""
+        with cls._lock:
+            now = time.time()
+            wait = cls._last_request + _MIN_INTERVAL - now
+            if wait > 0:
+                time.sleep(wait)
+            cls._last_request = time.time()
 
     def search_artist(self, keyword):
         """搜索画师。"""
@@ -125,5 +232,6 @@ class PixivClient:
             "bookmark_count": illust.get("total_bookmarks", 0),
             "view_count": illust.get("total_view", 0),
             "posted_at": illust.get("create_date"),
+            "is_bookmarked": illust.get("is_bookmarked", False),
             "urls": urls,
         }

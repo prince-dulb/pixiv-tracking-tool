@@ -166,5 +166,24 @@
             });
     })();
     </script>
+    <div id="toast-container" style="position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:300;pointer-events:none;"></div>
+    <script>
+    function showToast(message, type) {
+        type = type || 'info';
+        var container = document.getElementById('toast-container');
+        var toast = document.createElement('div');
+        toast.className = 'toast toast-' + type;
+        toast.textContent = message;
+        container.appendChild(toast);
+        toast.offsetHeight;
+        toast.classList.add('toast-visible');
+        setTimeout(function() {
+            toast.classList.remove('toast-visible');
+            setTimeout(function() {
+                if (toast.parentNode) toast.parentNode.removeChild(toast);
+            }, 300);
+        }, 3000);
+    }
+    </script>
 </body>
 </html>

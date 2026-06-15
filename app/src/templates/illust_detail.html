@@ -62,7 +62,7 @@
         {% if illust.page_count > 1 %}<span class="badge">{{ illust.page_count }}P</span>{% endif %}
     </div>
     <div class="detail-meta">
-        <span>画师：{{ artist.name if artist else 'Unknown' }} (@{{ artist.pixiv_account if artist else '' }})</span>
+        <span>画师：<a href="/artist/{{ artist.id }}" style="color:var(--accent);text-decoration:none;">{{ artist.name if artist else 'Unknown' }}</a> (@{{ artist.pixiv_account if artist else '' }})</span>
         <span>发布于 {{ illust.posted_at.strftime('%Y-%m-%d') if illust.posted_at else '' }}</span>
         <span>&hearts; {{ illust.bookmark_count or 0 }}</span>
         <span>&#128065; {{ illust.view_count or 0 }}</span>
@@ -76,6 +76,33 @@
     </div>
 </div>
 
+<div class="detail-actions">
+    <a href="https://www.pixiv.net/artworks/{{ illust.pixiv_illust_id }}" target="_blank" class="ext-link">在 Pixiv 查看 &#8599;</a>
+    <div style="margin-left:auto;display:flex;gap:8px;">
+        <form method="post" action="/illust/{{ illust.id }}/hide" style="display:inline;">
+            <input type="hidden" name="redirect_url" value="/illust/{{ illust.id }}{{ nav_query }}{% if show_hidden %}{% if nav_query %}&{% endif %}show_hidden=1{% endif %}">
+            <button type="submit" class="btn-sm btn-warn"
+                    {% if illust.is_hidden %}style="display:none;"{% endif %}>隐藏</button>
+        </form>
+        <form method="post" action="/illust/{{ illust.id }}/unhide" style="display:inline;">
+            <input type="hidden" name="redirect_url" value="/illust/{{ illust.id }}{{ nav_query }}{% if show_hidden %}{% if nav_query %}&{% endif %}show_hidden=1{% endif %}">
+            <button type="submit" class="btn-sm btn-ok"
+                    {% if not illust.is_hidden %}style="display:none;"{% endif %}>取消隐藏</button>
+        </form>
+        {% if illust.is_hidden %}
+        <form method="post" action="/illust/{{ illust.id }}/delete" style="display:inline;"
+              onsubmit="return confirm('永久删除这件作品及所有已下载文件？此操作不可撤销。')">
+            <input type="hidden" name="redirect_url" value="{{ back_url }}">
+            <button type="submit" class="btn-sm btn-danger">永久删除</button>
+        </form>
+        {% endif %}
+    </div>
+</div>
+
+{% if illust.is_hidden %}
+<div class="alert alert-warn" style="margin-bottom:16px;">此作品已隐藏。可从画廊「显示已隐藏」或画师作品页中查看和管理。</div>
+{% endif %}
+
 {% if paths %}
 <div class="page-viewer">
     {% for path in paths %}
@@ -84,6 +111,12 @@
         <div class="page-num">{{ loop.index }} / {{ paths|length }}</div>
     </div>
     {% endfor %}
+    <button class="page-viewer-bookmark{% if illust.is_bookmarked %} bookmarked{% endif %}"
+            id="detail-bookmark-btn"
+            data-illust-id="{{ illust.id }}"
+            title="{{ '取消收藏' if illust.is_bookmarked else '收藏' }}">
+        {{ '♥' if illust.is_bookmarked else '♡' }}
+    </button>
 </div>
 
 {% if prev_id or next_id %}
@@ -145,4 +178,46 @@ document.addEventListener('keydown', function(e) {
 </script>
 {% endif %}
 
+<script>
+(function() {
+    var btn = document.getElementById('detail-bookmark-btn');
+    if (!btn) return;
+
+    btn.addEventListener('click', function() {
+        var illustId = this.getAttribute('data-illust-id');
+        var wasBookmarked = this.classList.contains('bookmarked');
+
+        this.classList.toggle('bookmarked');
+        this.innerHTML = this.classList.contains('bookmarked') ? '&#9829;' : '&#9825;';
+        this.title = this.classList.contains('bookmarked') ? '取消收藏' : '收藏';
+
+        fetch('/illust/' + illustId + '/bookmark', { method: 'POST' })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (!data.ok) {
+                    if (wasBookmarked) {
+                        btn.classList.add('bookmarked');
+                        btn.innerHTML = '&#9829;';
+                        btn.title = '取消收藏';
+                    } else {
+                        btn.classList.remove('bookmarked');
+                        btn.innerHTML = '&#9825;';
+                        btn.title = '收藏';
+                    }
+                    showToast(data.error || '收藏操作失败', 'error');
+                }
+            })
+            .catch(function() {
+                if (wasBookmarked) {
+                    btn.classList.add('bookmarked');
+                    btn.innerHTML = '&#9829;';
+                } else {
+                    btn.classList.remove('bookmarked');
+                    btn.innerHTML = '&#9825;';
+                }
+                showToast('网络错误，请重试', 'error');
+            });
+    });
+})();
+</script>
 {% endblock %}

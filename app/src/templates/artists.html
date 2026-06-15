@@ -58,8 +58,11 @@
                     {{ "暂停" if artist.is_active else "恢复" }}
                 </button>
             </form>
-            <form method="post" action="/artists/{{ artist.id }}/remove" style="display:inline" onsubmit="return confirm('确定移除 {{ artist.name }} 及其所有作品记录？')">
-                <button type="submit" class="btn-sm btn-danger">移除</button>
+            <form method="post" action="/artists/{{ artist.id }}/remove-keep-files" style="display:inline" onsubmit="return confirm('仅移除 {{ artist.name|replace("'", "\\'") }} 的数据库记录？已下载的文件会保留在磁盘上。')">
+                <button type="submit" class="btn-sm btn-warn">移除记录</button>
+            </form>
+            <form method="post" action="/artists/{{ artist.id }}/remove-and-files" style="display:inline" onsubmit="return confirm('永久删除 {{ artist.name|replace("'", "\\'") }} 的所有记录及已下载文件？此操作不可撤销！')">
+                <button type="submit" class="btn-sm btn-danger">移除并删文件</button>
             </form>
         </div>
     </div>

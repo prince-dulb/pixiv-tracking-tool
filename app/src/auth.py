@@ -345,6 +345,7 @@ def configure_gallery_dl(refresh_token):
                 'refresh-token': refresh_token,
                 'directory': ['{user[name]} {user[id]}'],
                 'archive': str(_cfg.DATA_DIR / 'gallery_dl_archive.db'),
+                'sleep-request': 1.0,
             }
         })
     else:
@@ -354,6 +355,7 @@ def configure_gallery_dl(refresh_token):
                 'refresh-token': refresh_token,
                 'directory': [str(images_dir.relative_to(project_root)), '{user[name]} {user[id]}'],
                 'archive': str(_cfg.DATA_DIR / 'gallery_dl_archive.db'),
+                'sleep-request': 1.0,
             }
         })
 

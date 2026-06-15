@@ -35,32 +35,49 @@
         {% endfor %}
         <a href="{{ type_invert_url }}" class="filter-tag" style="background:#333;border-color:#555;">反选</a>
     </div>
+    <div class="filter-bar" style="margin-top:6px;">
+        <a href="{{ show_hidden_toggle_url }}" class="filter-tag"
+           style="{% if show_hidden %}background:var(--danger);color:#fff;border-color:var(--danger);{% else %}background:#333;border-color:#555;{% endif %}">
+            {{ '隐藏已隐藏作品' if show_hidden else '显示已隐藏' }}
+        </a>
+        {% if show_hidden %}
+        <span style="font-size:12px;color:var(--danger);">当前显示包含已隐藏作品</span>
+        {% endif %}
+    </div>
 </div>
 
 {% if illustrations %}
 <div class="gallery">
     {% for illust in illustrations %}
-    <div class="illust-card">
-        {% if illust.file_paths %}
-        <a href="/illust/{{ illust.id }}{% if selected_artist_ids is not none or selected_types is not none %}?{% if selected_artist_ids is not none %}artist_ids={{ selected_artist_ids|join(',') }}{% endif %}{% if selected_artist_ids is not none and selected_types is not none %}&{% endif %}{% if selected_types is not none %}types={{ selected_types|join(',') }}{% endif %}{% endif %}">
-            <img src="{{ illust.file_paths.split(',')[0] }}"
-                 alt="{{ illust.title }}"
-                 loading="lazy"
-                 class="illust-thumb"
-                 onerror="this.src='/static/placeholder.svg'">
-        </a>
-        {% else %}
-        <div class="illust-thumb placeholder"></div>
-        {% endif %}
+    <div class="illust-card {% if illust.is_hidden %}card-hidden{% endif %}">
+        <div class="thumb-container">
+            {% if illust.file_paths %}
+            <a href="/illust/{{ illust.id }}{% if selected_artist_ids is not none or selected_types is not none or show_hidden %}?{% if selected_artist_ids is not none %}artist_ids={{ selected_artist_ids|join(',') }}{% endif %}{% if selected_artist_ids is not none and selected_types is not none %}&{% endif %}{% if selected_types is not none %}types={{ selected_types|join(',') }}{% endif %}{% if (selected_artist_ids is not none or selected_types is not none) and show_hidden %}&{% endif %}{% if show_hidden %}show_hidden=1{% endif %}{% endif %}">
+                <img src="{{ illust.file_paths.split(',')[0] }}"
+                     alt="{{ illust.title }}"
+                     loading="lazy"
+                     class="illust-thumb"
+                     onerror="this.src='/static/placeholder.svg'">
+            </a>
+            {% else %}
+            <div class="illust-thumb placeholder"></div>
+            {% endif %}
+            <button class="card-bookmark-btn{% if illust.is_bookmarked %} bookmarked{% endif %}"
+                    data-illust-id="{{ illust.id }}"
+                    title="{{ '取消收藏' if illust.is_bookmarked else '收藏' }}">
+                {{ '♥' if illust.is_bookmarked else '♡' }}
+            </button>
+        </div>
         <div class="illust-info">
             <div class="illust-title" title="{{ illust.title }}">{{ illust.title }}</div>
             <div class="illust-meta">
-                <span>{{ artists_map[illust.artist_id].name if illust.artist_id in artists_map else 'Unknown' }}</span>
+                <span><a href="/artist/{{ illust.artist_id }}" style="color:var(--text-dim);text-decoration:none;">{{ artists_map[illust.artist_id].name if illust.artist_id in artists_map else 'Unknown' }}</a></span>
                 <span>{{ illust.posted_at.strftime('%Y-%m-%d') if illust.posted_at else '' }}</span>
             </div>
             <div class="illust-badges">
                 <span class="badge type-badge">{{ type_labels.get(illust.type, illust.type) }}</span>
                 {% if illust.page_count > 1 %}<span class="badge">{{ illust.page_count }}P</span>{% endif %}
+                {% if illust.is_hidden %}<span class="badge" style="background:var(--danger);">已隐藏</span>{% endif %}
             </div>
         </div>
     </div>
@@ -73,4 +90,168 @@
 </div>
 {% endif %}
 
+<script>
+(function() {
+    document.querySelectorAll('.card-bookmark-btn').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var illustId = this.getAttribute('data-illust-id');
+            var wasBookmarked = this.classList.contains('bookmarked');
+
+            this.classList.toggle('bookmarked');
+            this.innerHTML = this.classList.contains('bookmarked') ? '&#9829;' : '&#9825;';
+            this.title = this.classList.contains('bookmarked') ? '取消收藏' : '收藏';
+
+            fetch('/illust/' + illustId + '/bookmark', { method: 'POST' })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (!data.ok) {
+                        if (wasBookmarked) {
+                            btn.classList.add('bookmarked');
+                            btn.innerHTML = '&#9829;';
+                        } else {
+                            btn.classList.remove('bookmarked');
+                            btn.innerHTML = '&#9825;';
+                        }
+                        showToast(data.error || '收藏操作失败', 'error');
+                    }
+                })
+                .catch(function() {
+                    if (wasBookmarked) {
+                        btn.classList.add('bookmarked');
+                        btn.innerHTML = '&#9829;';
+                    } else {
+                        btn.classList.remove('bookmarked');
+                        btn.innerHTML = '&#9825;';
+                    }
+                    showToast('网络错误，请重试', 'error');
+                });
+        });
+    });
+})();
+</script>
+
+{% if illustrations %}
+<div id="load-spinner" class="load-spinner" style="display:none;">加载中...</div>
+
+{% if pagination_mode == 'paginate' and total_pages > 1 %}
+<div class="pagination">
+    {% if current_page > 1 %}
+    <a href="?page={{ current_page - 1 }}{% if selected_artist_ids is not none %}&artist_ids={{ selected_artist_ids|join(',') }}{% endif %}{% if selected_types is not none %}&types={{ selected_types|join(',') }}{% endif %}{% if show_hidden %}&show_hidden=1{% endif %}">←</a>
+    {% endif %}
+    {% if page_range[0] > 1 %}
+    <a href="?page=1{% if selected_artist_ids is not none %}&artist_ids={{ selected_artist_ids|join(',') }}{% endif %}{% if selected_types is not none %}&types={{ selected_types|join(',') }}{% endif %}{% if show_hidden %}&show_hidden=1{% endif %}">1</a>
+    {% if page_range[0] > 2 %}<span class="page-gap">...</span>{% endif %}
+    {% endif %}
+    {% for p in page_range %}
+    <a href="?page={{ p }}{% if selected_artist_ids is not none %}&artist_ids={{ selected_artist_ids|join(',') }}{% endif %}{% if selected_types is not none %}&types={{ selected_types|join(',') }}{% endif %}{% if show_hidden %}&show_hidden=1{% endif %}" class="{% if p == current_page %}active{% endif %}">{{ p }}</a>
+    {% endfor %}
+    {% if page_range[-1] < total_pages %}
+    {% if page_range[-1] < total_pages - 1 %}<span class="page-gap">...</span>{% endif %}
+    <a href="?page={{ total_pages }}{% if selected_artist_ids is not none %}&artist_ids={{ selected_artist_ids|join(',') }}{% endif %}{% if selected_types is not none %}&types={{ selected_types|join(',') }}{% endif %}{% if show_hidden %}&show_hidden=1{% endif %}">{{ total_pages }}</a>
+    {% endif %}
+    {% if current_page < total_pages %}
+    <a href="?page={{ current_page + 1 }}{% if selected_artist_ids is not none %}&artist_ids={{ selected_artist_ids|join(',') }}{% endif %}{% if selected_types is not none %}&types={{ selected_types|join(',') }}{% endif %}{% if show_hidden %}&show_hidden=1{% endif %}">→</a>
+    {% endif %}
+</div>
+{% endif %}
+{% endif %}
+
+<button id="back-to-top" class="back-to-top" title="回到顶部">↑</button>
+
+<script>
+(function() {
+    var mode = '{{ pagination_mode }}';
+    if (mode !== 'scroll') return;
+
+    var offset = {{ offset }};
+    var pageSize = {{ page_size }};
+    var hasMore = {{ 'true' if has_more else 'false' }};
+    var loading = false;
+
+    var gallery = document.querySelector('.gallery');
+    if (!gallery) return;
+
+    var sentinel = document.createElement('div');
+    sentinel.id = 'scroll-sentinel';
+    gallery.appendChild(sentinel);
+
+    var observer = new IntersectionObserver(function(entries) {
+        if (!entries[0].isIntersecting || !hasMore || loading) return;
+        loading = true;
+        offset += pageSize;
+        document.getElementById('load-spinner').style.display = 'block';
+
+        var params = new URLSearchParams(window.location.search);
+        params.set('offset', offset);
+        params.set('fragment', '1');
+
+        fetch('/?' + params.toString())
+            .then(function(r) {
+                hasMore = r.headers.get('X-Has-More') === '1';
+                return r.text();
+            })
+            .then(function(html) {
+                document.getElementById('load-spinner').style.display = 'none';
+                sentinel.insertAdjacentHTML('beforebegin', html);
+                loading = false;
+                if (!hasMore) sentinel.remove();
+                // 重新绑定新卡片上的收藏按钮
+                document.querySelectorAll('.card-bookmark-btn').forEach(function(btn) {
+                    if (btn._bound) return;
+                    btn._bound = true;
+                    btn.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        var illustId = this.getAttribute('data-illust-id');
+                        var wasBookmarked = this.classList.contains('bookmarked');
+                        this.classList.toggle('bookmarked');
+                        this.innerHTML = this.classList.contains('bookmarked') ? '&#9829;' : '&#9825;';
+                        this.title = this.classList.contains('bookmarked') ? '取消收藏' : '收藏';
+                        fetch('/illust/' + illustId + '/bookmark', { method: 'POST' })
+                            .then(function(r) { return r.json(); })
+                            .then(function(data) {
+                                if (!data.ok) {
+                                    if (wasBookmarked) {
+                                        btn.classList.add('bookmarked');
+                                        btn.innerHTML = '&#9829;';
+                                    } else {
+                                        btn.classList.remove('bookmarked');
+                                        btn.innerHTML = '&#9825;';
+                                    }
+                                    showToast(data.error || '收藏操作失败', 'error');
+                                }
+                            })
+                            .catch(function() {
+                                if (wasBookmarked) {
+                                    btn.classList.add('bookmarked');
+                                    btn.innerHTML = '&#9829;';
+                                } else {
+                                    btn.classList.remove('bookmarked');
+                                    btn.innerHTML = '&#9825;';
+                                }
+                                showToast('网络错误，请重试', 'error');
+                            });
+                    });
+                });
+            })
+            .catch(function() {
+                document.getElementById('load-spinner').style.display = 'none';
+                loading = false;
+                offset -= pageSize;
+            });
+    }, {rootMargin: '200px'});
+    observer.observe(sentinel);
+
+    // 回到顶部按钮
+    var topBtn = document.getElementById('back-to-top');
+    window.addEventListener('scroll', function() {
+        topBtn.style.display = window.scrollY > window.innerHeight * 2 ? 'block' : 'none';
+    });
+    topBtn.addEventListener('click', function() {
+        window.scrollTo({top: 0, behavior: 'smooth'});
+    });
+})();
+</script>
 {% endblock %}

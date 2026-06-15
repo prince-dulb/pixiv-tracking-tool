@@ -58,14 +58,34 @@ class Illustration(Base):
     posted_at = Column(DateTime)
     downloaded_at = Column(DateTime, default=datetime.utcnow)
     file_paths = Column(Text)  # JSON array string
+    is_hidden = Column(Boolean, default=False)
     is_bookmarked = Column(Boolean, default=False)
     rating = Column(Integer, default=0)
 
     artist = relationship("TrackedArtist", back_populates="illustrations")
 
 
+def _column_exists(dbapi_connection, table, column):
+    cursor = dbapi_connection.cursor()
+    cursor.execute(f"PRAGMA table_info({table})")
+    exists = any(row[1] == column for row in cursor.fetchall())
+    cursor.close()
+    return exists
+
+
+def _migrate_existing_db():
+    """幂等添加 v0.0.4 之后引入的列。"""
+    with engine.begin() as conn:
+        dbapi_connection = conn.connection.driver_connection
+        if not _column_exists(dbapi_connection, "illustration", "is_hidden"):
+            conn.exec_driver_sql("ALTER TABLE illustration ADD COLUMN is_hidden BOOLEAN DEFAULT 0")
+        if not _column_exists(dbapi_connection, "illustration", "is_bookmarked"):
+            conn.exec_driver_sql("ALTER TABLE illustration ADD COLUMN is_bookmarked BOOLEAN DEFAULT 0")
+
+
 def init_db():
     Base.metadata.create_all(engine)
+    _migrate_existing_db()
 
 
 def reinit_db():
@@ -78,3 +98,4 @@ def reinit_db():
                            connect_args={"check_same_thread": False})
     event.listens_for(engine, "connect")(_set_sqlite_pragma)
     Base.metadata.create_all(engine)
+    _migrate_existing_db()

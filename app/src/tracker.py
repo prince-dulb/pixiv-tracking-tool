@@ -3,6 +3,7 @@ import json
 import os
 import io
 import re
+import shutil
 import zipfile
 from datetime import datetime, timezone
 from PIL import Image
@@ -18,8 +19,9 @@ from .models import Session, TrackedArtist, Illustration
 
 
 def _artist_dir_name(artist):
-    """画师对应的文件目录名：{name} {user_id}"""
-    return f"{artist.name} {artist.pixiv_user_id}"
+    """画师对应的文件目录名：{name} {user_id}（Windows 非法字符替换为 _）"""
+    safe_name = re.sub(r'[\\/:*?"<>|]', '_', artist.name)
+    return f"{safe_name} {artist.pixiv_user_id}"
 
 
 def _parse_iso_date(s):
@@ -137,6 +139,94 @@ class Tracker:
             session.delete(artist)
             session.commit()
         session.close()
+
+    def delete_illust_files(self, illust):
+        """删除单件作品的全部本地图片文件。"""
+        if not illust.file_paths:
+            return
+        for web_path in illust.file_paths.split(","):
+            web_path = web_path.strip()
+            if not web_path:
+                continue
+            # "/images/DirName/file.jpg" → 文件系统路径
+            relative = web_path.replace("/images/", "", 1)
+            fs_path = _cfg.IMAGES_DIR / relative
+            try:
+                if fs_path.exists():
+                    fs_path.unlink()
+            except OSError as e:
+                print(f"  [!] 删除文件失败 {fs_path}: {e}")
+
+    def permanently_delete_illust(self, illust_id):
+        """永久删除作品：删本地文件 + 删数据库记录。"""
+        session = Session()
+        illust = session.query(Illustration).get(illust_id)
+        if illust:
+            self.delete_illust_files(illust)
+            session.delete(illust)
+            session.commit()
+        session.close()
+
+    def sync_all_bookmarks(self):
+        """全量同步所有活跃画师作品的 is_bookmarked 状态。
+        在后台线程中调用；通过 progress 模块报告进度。"""
+        from . import progress
+
+        session = Session()
+        artists = session.query(TrackedArtist).filter_by(is_active=True).all()
+
+        task_id = progress.begin_task("同步收藏状态")
+        progress.begin_phase(task_id, "checking")
+        progress.set_artist_progress(task_id, 0, len(artists))
+        progress.set_detail(task_id, "正在同步收藏状态...")
+
+        total_updated = 0
+        for i, artist in enumerate(artists):
+            progress.set_artist(task_id, artist.name)
+            progress.set_artist_progress(task_id, i + 1, len(artists))
+            try:
+                for illust_data in self.client.get_all_artist_illusts(artist.pixiv_user_id):
+                    illust = session.query(Illustration).filter_by(
+                        pixiv_illust_id=illust_data["illust_id"]
+                    ).first()
+                    if illust:
+                        api_bookmarked = illust_data.get("is_bookmarked", False)
+                        if illust.is_bookmarked != api_bookmarked:
+                            illust.is_bookmarked = api_bookmarked
+                            total_updated += 1
+                session.commit()
+            except Exception as e:
+                progress.add_error(task_id, f"{artist.name}: {e}")
+
+        session.close()
+        progress.set_detail(task_id, f"同步完成，更新 {total_updated} 件作品")
+        progress.finish_task(task_id)
+        return total_updated
+
+    def remove_artist_keep_files(self, artist_id):
+        """移除画师：删数据库记录，保留已下载文件。"""
+        session = Session()
+        artist = session.query(TrackedArtist).get(artist_id)
+        if artist:
+            session.delete(artist)  # cascade 删除所有 Illustration 记录
+            session.commit()
+        session.close()
+
+    def remove_artist_and_files(self, artist_id):
+        """移除画师：删数据库记录 + 删除整个画师下载目录。"""
+        session = Session()
+        artist = session.query(TrackedArtist).get(artist_id)
+        if not artist:
+            session.close()
+            return
+        dir_name = _artist_dir_name(artist)
+        session.delete(artist)  # 先删 DB（cascade），文件删除失败不影响 DB 清理
+        session.commit()
+        session.close()
+        # DB 提交成功后再删文件
+        folder = _cfg.IMAGES_DIR / dir_name
+        if folder.exists():
+            shutil.rmtree(folder, ignore_errors=True)
 
     def check_updates(self):
         """检查所有活跃画师的新作品——先全部检查，再统一下载。"""
@@ -312,6 +402,15 @@ class Tracker:
             if illust_data["illust_id"] not in existing_ids:
                 self._save_illust(session, artist, illust_data)
                 count += 1
+            else:
+                # 已有作品：同步收藏状态（数据已在手，零额外 API 调用）
+                illust = session.query(Illustration).filter_by(
+                    pixiv_illust_id=illust_data["illust_id"]
+                ).first()
+                if illust:
+                    api_bookmarked = illust_data.get("is_bookmarked", False)
+                    if illust.is_bookmarked != api_bookmarked:
+                        illust.is_bookmarked = api_bookmarked
         return count
 
     def _save_illust(self, session, artist, illust_data):
@@ -329,6 +428,7 @@ class Tracker:
             bookmark_count=illust_data["bookmark_count"],
             view_count=illust_data["view_count"],
             posted_at=posted_at,
+            is_bookmarked=illust_data.get("is_bookmarked", False),
         )
         session.add(illust)
         session.commit()
