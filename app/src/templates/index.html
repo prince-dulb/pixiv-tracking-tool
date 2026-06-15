@@ -50,6 +50,7 @@
         <div class="filter-section">
             <button class="filter-section-title" data-section="tags">标签</button>
             <div class="filter-section-body" id="section-tags" style="display:none;">
+                <a href="{{ preserve_url(tags=None) }}" class="filter-tag {% if not selected_tags %}active{% endif %}">全部</a>
                 {% for tag in tag_list %}
                 <a href="{{ preserve_url(tags=tag) }}" class="filter-tag {% if tag in selected_tags %}active{% endif %}" data-tag="{{ tag }}">{{ tag }}</a>
                 {% endfor %}
@@ -141,7 +142,7 @@
         var period = params.get('period');
         parts.push('期间:' + (PERIOD_NAMES[period] || '不限'));
         var tagsParam = params.get('tags');
-        if (tagsParam) parts.push('标签:' + tagsParam);
+        parts.push('标签:' + (tagsParam || '全部'));
         if (params.get('show_hidden') === '1') parts.push('含已隐藏');
         document.querySelector('.filter-summary').textContent = parts.join(' · ');
     }
@@ -268,22 +269,34 @@
             tag.setAttribute('href', '/?' + p.toString());
         });
 
-        // ── 标签 tags ──
-        var selectedTags = tagsParam ? tagsParam.split(',') : [];
+        // ── 标签 tags（逻辑同画师：全选→单选，已选→toggle）──
+        var selectedTags = tagsParam ? tagsParam.split(',') : null;  // null = 全选
         panel.querySelectorAll('#section-tags .filter-tag[data-tag]').forEach(function(tag) {
             var t = tag.getAttribute('data-tag');
-            var isActive = selectedTags.indexOf(t) >= 0;
+            var isActive = selectedTags === null || selectedTags.indexOf(t) >= 0;
             tag.classList.toggle('active', isActive);
-            // 更新 href：toggle 此 tag
-            var newTags;
-            if (isActive) {
-                newTags = selectedTags.filter(function(x) { return x !== t; });
+            // 更新 href
+            var newSet;
+            if (selectedTags === null) {
+                // 全选状态 → 点击后只选此 tag
+                newSet = [t];
+            } else if (selectedTags.indexOf(t) >= 0) {
+                // 已选 → 移除
+                newSet = selectedTags.filter(function(x) { return x !== t; });
             } else {
-                newTags = selectedTags.concat([t]);
+                // 未选 → 添加
+                newSet = selectedTags.concat([t]);
             }
             var p = new URLSearchParams(window.location.search);
-            if (newTags.length === 0) { p.delete('tags'); }
-            else { p.set('tags', newTags.join(',')); }
+            if (newSet.length === 0) { p.delete('tags'); }
+            else { p.set('tags', newSet.join(',')); }
+            tag.setAttribute('href', buildUrl(p));
+        });
+        // "全部" tag
+        panel.querySelectorAll('#section-tags .filter-tag:not([data-tag])').forEach(function(tag) {
+            tag.classList.toggle('active', selectedTags === null);
+            var p = new URLSearchParams(window.location.search);
+            p.delete('tags');
             tag.setAttribute('href', buildUrl(p));
         });
     }
