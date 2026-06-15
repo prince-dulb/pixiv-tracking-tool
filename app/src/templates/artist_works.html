@@ -150,7 +150,12 @@
     var offset = {{ offset }};
     var pageSize = {{ page_size }};
     var hasMore = {{ 'true' if has_more else 'false' }};
+    var maxItems = {{ max_visible_items }};
+    var totalLoaded = {{ illustrations|length }};
     var loading = false;
+    var lastFetchTime = 0;
+
+    if (maxItems && totalLoaded >= maxItems) hasMore = false;
 
     var gallery = document.querySelector('.gallery');
     if (!gallery) return;
@@ -159,8 +164,31 @@
     sentinel.id = 'scroll-sentinel';
     gallery.appendChild(sentinel);
 
+    function countPendingImages() {
+        var imgs = gallery.querySelectorAll('img');
+        var pending = 0;
+        for (var i = Math.max(0, imgs.length - pageSize * 2); i < imgs.length; i++) {
+            if (imgs[i] && !imgs[i].complete) pending++;
+        }
+        return pending;
+    }
+
     var observer = new IntersectionObserver(function(entries) {
         if (!entries[0].isIntersecting || !hasMore || loading) return;
+
+        if (maxItems && totalLoaded >= maxItems) {
+            hasMore = false;
+            sentinel.remove();
+            document.getElementById('load-spinner').style.display = 'none';
+            return;
+        }
+
+        if (countPendingImages() > 10) return;
+
+        var now = Date.now();
+        if (now - lastFetchTime < 1000) return;
+        lastFetchTime = now;
+
         loading = true;
         offset += pageSize;
         document.getElementById('load-spinner').style.display = 'block';
@@ -178,8 +206,11 @@
             .then(function(html) {
                 document.getElementById('load-spinner').style.display = 'none';
                 sentinel.insertAdjacentHTML('beforebegin', html);
+                totalLoaded += pageSize;
                 loading = false;
-                if (!hasMore) sentinel.remove();
+                if (!hasMore || (maxItems && totalLoaded >= maxItems)) {
+                    sentinel.remove();
+                }
                 // 重新绑定新卡片上的收藏按钮
                 document.querySelectorAll('.card-bookmark-btn').forEach(function(btn) {
                     if (btn._bound) return;
@@ -224,7 +255,7 @@
                 loading = false;
                 offset -= pageSize;
             });
-    }, {rootMargin: '200px'});
+    }, {rootMargin: '600px'});
     observer.observe(sentinel);
 
     // 回到顶部按钮

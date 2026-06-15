@@ -169,6 +169,7 @@ async def index(request: Request, artist_ids: str = Query(None), types: str = Qu
          "offset": offset, "page_size": page_size,
          "total_count": total_count, "has_more": has_more,
          "pagination_mode": _cfg.PAGINATION_MODE,
+         "max_visible_items": _cfg.MAX_VISIBLE_ITEMS,
          "current_page": current_page, "total_pages": total_pages,
          "page_range": page_range},
     )
@@ -412,6 +413,7 @@ async def artist_works(request: Request, artist_id: int, type: str = Query(None)
          "offset": offset, "page_size": page_size,
          "total_count": total_count, "has_more": has_more,
          "pagination_mode": _cfg.PAGINATION_MODE,
+         "max_visible_items": _cfg.MAX_VISIBLE_ITEMS,
          "current_page": current_page, "total_pages": total_pages,
          "page_range": page_range},
     )
