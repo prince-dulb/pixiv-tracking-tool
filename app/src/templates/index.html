@@ -270,6 +270,7 @@
         });
 
         // ── 标签 tags（逻辑同画师：全选→单选，已选→toggle）──
+        var tagsParam = params.get('tags');
         var selectedTags = tagsParam ? tagsParam.split(',') : null;  // null = 全选
         panel.querySelectorAll('#section-tags .filter-tag[data-tag]').forEach(function(tag) {
             var t = tag.getAttribute('data-tag');
