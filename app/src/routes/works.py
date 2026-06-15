@@ -18,9 +18,13 @@ def _ids_str(ids_set):
 async def index(request: Request, artist_ids: str = Query(None), types: str = Query(None),
                 show_hidden: str = Query(None),
                 offset: int = Query(0), fragment: str = Query(None),
-                page: int = Query(None)):
+                page: int = Query(None),
+                period: str = Query(None),
+                posted_after: str = Query(None),
+                posted_before: str = Query(None)):
     show_hidden = show_hidden in ("1", "true")
     from .. import config as _cfg
+    from datetime import datetime, timedelta
 
     page_size = _cfg.PAGE_SIZE
     if page is not None and page > 0:
@@ -50,6 +54,24 @@ async def index(request: Request, artist_ids: str = Query(None), types: str = Qu
     if not show_hidden:
         query = query.filter(Illustration.is_hidden != True)
 
+    # 投稿期间筛选
+    if period and period != 'custom':
+        now = datetime.utcnow()
+        delta_map = {
+            '24h': timedelta(hours=24),
+            'week': timedelta(days=7),
+            'month': timedelta(days=30),
+            'half_year': timedelta(days=183),
+            'year': timedelta(days=365),
+        }
+        if period in delta_map:
+            query = query.filter(Illustration.posted_at >= now - delta_map[period])
+    elif period == 'custom':
+        if posted_after:
+            query = query.filter(Illustration.posted_at >= posted_after)
+        if posted_before:
+            query = query.filter(Illustration.posted_at <= posted_before + 'T23:59:59')
+
     total_count = query.count()
     illustrations = query.offset(offset).limit(page_size).all()
     has_more = (offset + page_size) < total_count
@@ -60,12 +82,23 @@ async def index(request: Request, artist_ids: str = Query(None), types: str = Qu
         artists_map = {a.id: a for a in artists_list}
     session.close()
 
+    def _period_params():
+        parts = []
+        if period:
+            parts.append(f"period={period}")
+        if posted_after:
+            parts.append(f"posted_after={posted_after}")
+        if posted_before:
+            parts.append(f"posted_before={posted_before}")
+        return parts
+
     def _index_url(artist_param=None, type_param=None):
         parts = []
         if artist_param:
             parts.append(artist_param)
         if type_param:
             parts.append(type_param)
+        parts.extend(_period_params())
         if not parts:
             return "/"
         return "/?" + "&".join(parts)
@@ -125,11 +158,50 @@ async def index(request: Request, artist_ids: str = Query(None), types: str = Qu
             parts.append(f"artist_ids={artist_ids}")
         if types:
             parts.append(f"types={types}")
+        parts.extend(_period_params())
         if not show_hidden:
             parts.append("show_hidden=1")
         qs = "&".join(parts)
         return "/?" + qs if qs else "/"
     show_hidden_toggle_url = _show_hidden_toggle_url()
+
+    # 通用 URL 构建器：保留所有筛选条件，覆盖指定 key
+    def _preserve_url(**overrides):
+        p = {}
+        if artist_ids: p['artist_ids'] = artist_ids
+        if types: p['types'] = types
+        if show_hidden: p['show_hidden'] = '1'
+        if period: p['period'] = period
+        if posted_after: p['posted_after'] = posted_after
+        if posted_before: p['posted_before'] = posted_before
+        for k, v in overrides.items():
+            if v is None:
+                p.pop(k, None)
+            else:
+                p[k] = v
+        if not p:
+            return '/'
+        return '/?' + '&'.join(f'{k}={v}' for k, v in p.items())
+
+    # 筛选摘要
+    period_labels = {'24h': '24小时内', 'week': '一周内', 'month': '一个月内',
+                     'half_year': '半年内', 'year': '一年内', 'custom': '指定期间'}
+    filter_summary = ''
+    if selected_ids is not None:
+        filter_summary += f'画师:{len(selected_ids)}位'
+    else:
+        filter_summary += '画师:全部'
+    if selected_types is not None:
+        labels = [TYPE_LABELS[t] for t in sorted(selected_types)]
+        filter_summary += ' · 类型:' + ','.join(labels)
+    else:
+        filter_summary += ' · 类型:全部'
+    if period:
+        filter_summary += ' · 期间:' + period_labels.get(period, period)
+    else:
+        filter_summary += ' · 期间:不限'
+    if show_hidden:
+        filter_summary += ' · 含已隐藏'
 
     # Fragment 模式：仅返回卡片 HTML（AJAX 无限滚动）
     if fragment == "1":
@@ -171,7 +243,12 @@ async def index(request: Request, artist_ids: str = Query(None), types: str = Qu
          "pagination_mode": _cfg.PAGINATION_MODE,
          "max_visible_items": _cfg.MAX_VISIBLE_ITEMS,
          "current_page": current_page, "total_pages": total_pages,
-         "page_range": page_range},
+         "page_range": page_range,
+         "period": period, "posted_after": posted_after,
+         "posted_before": posted_before,
+         "preserve_url": _preserve_url,
+         "period_labels": period_labels,
+         "filter_summary": filter_summary},
     )
 
 
@@ -345,9 +422,13 @@ async def illust_detail(request: Request, illust_id: int,
 async def artist_works(request: Request, artist_id: int, type: str = Query(None),
                        show_hidden: str = Query(None),
                        offset: int = Query(0), fragment: str = Query(None),
-                       page: int = Query(None)):
+                       page: int = Query(None),
+                       period: str = Query(None),
+                       posted_after: str = Query(None),
+                       posted_before: str = Query(None)):
     show_hidden = show_hidden in ("1", "true")
     from .. import config as _cfg
+    from datetime import datetime, timedelta
 
     page_size = _cfg.PAGE_SIZE
     if page is not None and page > 0:
@@ -369,10 +450,58 @@ async def artist_works(request: Request, artist_id: int, type: str = Query(None)
     if not show_hidden:
         query = query.filter(Illustration.is_hidden != True)
 
+    # 投稿期间筛选
+    if period and period != 'custom':
+        now = datetime.utcnow()
+        delta_map = {
+            '24h': timedelta(hours=24),
+            'week': timedelta(days=7),
+            'month': timedelta(days=30),
+            'half_year': timedelta(days=183),
+            'year': timedelta(days=365),
+        }
+        if period in delta_map:
+            query = query.filter(Illustration.posted_at >= now - delta_map[period])
+    elif period == 'custom':
+        if posted_after:
+            query = query.filter(Illustration.posted_at >= posted_after)
+        if posted_before:
+            query = query.filter(Illustration.posted_at <= posted_before + 'T23:59:59')
+
     total_count = query.count()
     illustrations = query.offset(offset).limit(page_size).all()
     has_more = (offset + page_size) < total_count
     session.close()
+
+    # 通用 URL 构建器
+    def _preserve_url(**overrides):
+        p = {}
+        if type and type in TYPE_LABELS: p['type'] = type
+        if show_hidden: p['show_hidden'] = '1'
+        if period: p['period'] = period
+        if posted_after: p['posted_after'] = posted_after
+        if posted_before: p['posted_before'] = posted_before
+        for k, v in overrides.items():
+            if v is None:
+                p.pop(k, None)
+            else:
+                p[k] = v
+        base = f'/artist/{artist_id}'
+        if not p:
+            return base
+        return base + '?' + '&'.join(f'{k}={v}' for k, v in p.items())
+
+    # 筛选摘要
+    period_labels = {'24h': '24小时内', 'week': '一周内', 'month': '一个月内',
+                     'half_year': '半年内', 'year': '一年内', 'custom': '指定期间'}
+    filter_summary = ''
+    filter_summary += '类型:' + (TYPE_LABELS[type] if type and type in TYPE_LABELS else '全部')
+    if period:
+        filter_summary += ' · 期间:' + period_labels.get(period, period)
+    else:
+        filter_summary += ' · 期间:不限'
+    if show_hidden:
+        filter_summary += ' · 含已隐藏'
 
     # Fragment 模式：仅返回卡片 HTML（AJAX 无限滚动）
     if fragment == "1":
@@ -390,6 +519,12 @@ async def artist_works(request: Request, artist_id: int, type: str = Query(None)
         parts = []
         if type and type in TYPE_LABELS:
             parts.append(f"type={type}")
+        if period:
+            parts.append(f"period={period}")
+        if posted_after:
+            parts.append(f"posted_after={posted_after}")
+        if posted_before:
+            parts.append(f"posted_before={posted_before}")
         if target_show:
             parts.append("show_hidden=1")
         qs = "&".join(parts)
@@ -415,7 +550,12 @@ async def artist_works(request: Request, artist_id: int, type: str = Query(None)
          "pagination_mode": _cfg.PAGINATION_MODE,
          "max_visible_items": _cfg.MAX_VISIBLE_ITEMS,
          "current_page": current_page, "total_pages": total_pages,
-         "page_range": page_range},
+         "page_range": page_range,
+         "period": period, "posted_after": posted_after,
+         "posted_before": posted_before,
+         "preserve_url": _preserve_url,
+         "period_labels": period_labels,
+         "filter_summary": filter_summary},
     )
 
 

@@ -1,50 +1,115 @@
 {% extends "base.html" %}
 {% block content %}
 
-<div class="toolbar">
-    <div class="toolbar-row">
-        <div class="filter-bar filter-bar-artists">
-            <span style="flex-shrink:0;">画师：</span>
-            <div class="filter-scroll">
-                <a href="{{ all_url }}"
-                   class="filter-tag {% if selected_artist_ids is none %}active{% endif %}">全部</a>
-                {% for a in artists %}
-                <a href="{{ toggle_urls[a.id] }}"
-                   class="filter-tag {% if selected_artist_ids is none or a.id in selected_artist_ids %}active{% endif %}">{{ a.name }}</a>
-                {% endfor %}
-            </div>
-            <a href="{{ artist_invert_url }}" class="filter-tag" style="background:#333;border-color:#555;flex-shrink:0;">反选</a>
-        </div>
-        <form method="post" action="/refresh" style="margin-left: auto;">
-            {% if selected_artist_ids is not none %}
-            <input type="hidden" name="artist_ids" value="{{ selected_artist_ids|join(',') }}">
-            {% endif %}
-            {% if selected_types is not none %}
-            <input type="hidden" name="types" value="{{ selected_types|join(',') }}">
-            {% endif %}
-            <button type="submit" class="btn-sm">刷新检查</button>
-        </form>
-    </div>
-    <div class="filter-bar" style="margin-top: 6px;">
-        <span>类型：</span>
-        <a href="{{ all_url }}"
-           class="filter-tag {% if selected_types is none %}active{% endif %}">全部</a>
-        {% for t, label in type_labels.items() %}
-        <a href="{{ type_toggle_urls[t] }}"
-           class="filter-tag {% if selected_types is none or t in selected_types %}active{% endif %}">{{ label }}</a>
-        {% endfor %}
-        <a href="{{ type_invert_url }}" class="filter-tag" style="background:#333;border-color:#555;">反选</a>
-    </div>
-    <div class="filter-bar" style="margin-top:6px;">
-        <a href="{{ show_hidden_toggle_url }}" class="filter-tag"
-           style="{% if show_hidden %}background:var(--danger);color:#fff;border-color:var(--danger);{% else %}background:#333;border-color:#555;{% endif %}">
-            {{ '隐藏已隐藏作品' if show_hidden else '显示已隐藏' }}
-        </a>
-        {% if show_hidden %}
-        <span style="font-size:12px;color:var(--danger);">当前显示包含已隐藏作品</span>
+<div class="filter-trigger-bar">
+    <button id="filter-toggle" class="filter-hamburger">☰ 筛选</button>
+    <span class="filter-summary">{{ filter_summary }}</span>
+    <form method="post" action="/refresh" style="margin-left:auto;">
+        {% if selected_artist_ids is not none %}
+        <input type="hidden" name="artist_ids" value="{{ selected_artist_ids|join(',') }}">
         {% endif %}
+        {% if selected_types is not none %}
+        <input type="hidden" name="types" value="{{ selected_types|join(',') }}">
+        {% endif %}
+        <button type="submit" class="btn-sm">刷新检查</button>
+    </form>
+</div>
+
+<div id="filter-panel" class="filter-overlay" style="display:none;">
+    <div class="filter-panel-box">
+        <div class="filter-panel-header">
+            <span>筛选</span>
+            <button id="filter-close">✕</button>
+        </div>
+
+        <!-- 画师 -->
+        <div class="filter-section">
+            <button class="filter-section-title open" data-section="artist">画师</button>
+            <div class="filter-section-body" id="section-artist">
+                <a href="{{ all_url }}" class="filter-tag {% if selected_artist_ids is none %}active{% endif %}">全部</a>
+                {% for a in artists %}
+                <a href="{{ toggle_urls[a.id] }}" class="filter-tag {% if selected_artist_ids is none or a.id in selected_artist_ids %}active{% endif %}">{{ a.name }}</a>
+                {% endfor %}
+                <a href="{{ artist_invert_url }}" class="filter-tag filter-invert">反选</a>
+            </div>
+        </div>
+
+        <!-- 作品类型 -->
+        <div class="filter-section">
+            <button class="filter-section-title" data-section="type">作品类型</button>
+            <div class="filter-section-body" id="section-type" style="display:none;">
+                <a href="{{ all_url }}" class="filter-tag {% if selected_types is none %}active{% endif %}">全部</a>
+                {% for t, label in type_labels.items() %}
+                <a href="{{ type_toggle_urls[t] }}" class="filter-tag {% if selected_types is none or t in selected_types %}active{% endif %}">{{ label }}</a>
+                {% endfor %}
+                <a href="{{ type_invert_url }}" class="filter-tag filter-invert">反选</a>
+            </div>
+        </div>
+
+        <!-- 投稿期间 -->
+        <div class="filter-section">
+            <button class="filter-section-title {% if period %}open{% endif %}" data-section="period">投稿期间</button>
+            <div class="filter-section-body" id="section-period" style="{% if period %}display:flex;{% else %}display:none;{% endif %}">
+                <a href="{{ preserve_url(period=None, posted_after=None, posted_before=None) }}" class="filter-tag {% if not period %}active{% endif %}">不限</a>
+                {% for val, label in period_labels.items() %}
+                <a href="{{ preserve_url(period=val, posted_after=None, posted_before=None) }}" class="filter-tag {% if period == val %}active{% endif %}">{{ label }}</a>
+                {% endfor %}
+                <div class="date-range" id="custom-date-range" style="{% if period == 'custom' %}display:flex;{% else %}display:none;{% endif %}width:100%;">
+                    <input type="date" id="filter-after" value="{{ posted_after or '' }}">
+                    <span>～</span>
+                    <input type="date" id="filter-before" value="{{ posted_before or '' }}">
+                    <button id="filter-date-apply" class="btn-sm">确定</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 显示选项 -->
+        <div class="filter-section">
+            <button class="filter-section-title" data-section="display">显示选项</button>
+            <div class="filter-section-body" id="section-display" style="display:none;">
+                <a href="{{ show_hidden_toggle_url }}" class="filter-tag {% if show_hidden %}active{% endif %}" style="{% if show_hidden %}background:var(--danger);color:#fff;border-color:var(--danger);{% endif %}">
+                    {{ '隐藏已隐藏作品' if show_hidden else '显示已隐藏' }}
+                </a>
+            </div>
+        </div>
     </div>
 </div>
+
+<script>
+(function() {
+    var panel = document.getElementById('filter-panel');
+    var toggle = document.getElementById('filter-toggle');
+    var close = document.getElementById('filter-close');
+
+    toggle.addEventListener('click', function() { panel.style.display = 'flex'; });
+    close.addEventListener('click', function() { panel.style.display = 'none'; });
+    panel.addEventListener('click', function(e) { if (e.target === panel) panel.style.display = 'none'; });
+
+    // 手风琴
+    panel.querySelectorAll('.filter-section-title').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var body = document.getElementById('section-' + this.getAttribute('data-section'));
+            if (!body) return;
+            var isOpen = body.style.display !== 'none';
+            body.style.display = isOpen ? 'none' : 'flex';
+            this.classList.toggle('open', !isOpen);
+        });
+    });
+
+    // 日期确定按钮
+    var dateApply = document.getElementById('filter-date-apply');
+    if (dateApply) {
+        dateApply.addEventListener('click', function() {
+            var params = new URLSearchParams(window.location.search);
+            params.set('period', 'custom');
+            params.set('posted_after', document.getElementById('filter-after').value);
+            params.set('posted_before', document.getElementById('filter-before').value);
+            params.delete('offset');
+            window.location.search = params.toString();
+        });
+    }
+})();
+</script>
 
 {% if illustrations %}
 <div class="gallery">
