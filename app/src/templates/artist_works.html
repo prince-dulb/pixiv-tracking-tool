@@ -120,6 +120,12 @@
         });
         panel.querySelectorAll('#section-display .filter-tag').forEach(function(tag) {
             tag.classList.toggle('active', showHidden === '1');
+            // 更新 href 指向下一次 toggle
+            var p = new URLSearchParams(window.location.search);
+            if (showHidden === '1') { p.delete('show_hidden'); }
+            else { p.set('show_hidden', '1'); }
+            p.delete('fragment'); p.delete('offset');
+            tag.setAttribute('href', BASE_PATH + '?' + p.toString());
         });
     }
 

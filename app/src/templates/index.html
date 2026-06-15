@@ -28,7 +28,7 @@
             <div class="filter-section-body" id="section-artist">
                 <a href="{{ all_url }}" class="filter-tag {% if selected_artist_ids is none %}active{% endif %}">全部</a>
                 {% for a in artists %}
-                <a href="{{ toggle_urls[a.id] }}" class="filter-tag {% if selected_artist_ids is none or a.id in selected_artist_ids %}active{% endif %}">{{ a.name }}</a>
+                <a href="{{ toggle_urls[a.id] }}" class="filter-tag {% if selected_artist_ids is none or a.id in selected_artist_ids %}active{% endif %}" data-artist-id="{{ a.id }}">{{ a.name }}</a>
                 {% endfor %}
                 <a href="{{ artist_invert_url }}" class="filter-tag filter-invert">反选</a>
             </div>
@@ -40,7 +40,7 @@
             <div class="filter-section-body" id="section-type" style="display:none;">
                 <a href="{{ all_url }}" class="filter-tag {% if selected_types is none %}active{% endif %}">全部</a>
                 {% for t, label in type_labels.items() %}
-                <a href="{{ type_toggle_urls[t] }}" class="filter-tag {% if selected_types is none or t in selected_types %}active{% endif %}">{{ label }}</a>
+                <a href="{{ type_toggle_urls[t] }}" class="filter-tag {% if selected_types is none or t in selected_types %}active{% endif %}" data-type="{{ t }}">{{ label }}</a>
                 {% endfor %}
                 <a href="{{ type_invert_url }}" class="filter-tag filter-invert">反选</a>
             </div>
@@ -129,45 +129,28 @@
         var period = params.get('period');
         var showHidden = params.get('show_hidden');
 
-        // 画师 tags
-        var selectedArtists = aids ? aids.split(',') : null;
-        panel.querySelectorAll('#section-artist .filter-tag').forEach(function(tag) {
-            var href = tag.getAttribute('href');
-            if (!href) return;
-            if (href === '/' || href === '/?') {
-                // "全部" tag
-                tag.classList.toggle('active', !selectedArtists);
-            } else if (href.indexOf('artist_invert') > -1 || tag.classList.contains('filter-invert')) {
-                // 反选 tag — 不处理
-            } else {
-                // Individual artist tag — check if its ID is in the set
-                var m = href.match(/artist_ids=([^&]+)/);
-                if (m) {
-                    var ids = m[1].split(',');
-                    // The toggle URL logic is complex — just skip per-tag highlighting
-                    // for now; the summary text is the primary indicator
-                }
-            }
+        // 画师 tags — 通过 data-artist-id 判断
+        var selectedArtists = aids ? aids.split(',') : null;  // null = 全选
+        panel.querySelectorAll('#section-artist .filter-tag[data-artist-id]').forEach(function(tag) {
+            var id = tag.getAttribute('data-artist-id');
+            tag.classList.toggle('active', selectedArtists === null || selectedArtists.indexOf(id) >= 0);
+        });
+        // "全部" tag（无 data-artist-id，非反选）
+        panel.querySelectorAll('#section-artist .filter-tag:not([data-artist-id])').forEach(function(tag) {
+            if (tag.classList.contains('filter-invert')) return;
+            tag.classList.toggle('active', selectedArtists === null);
         });
 
-        // 类型 tags
-        var selectedTypes = types ? types.split(',') : null;
-        panel.querySelectorAll('#section-type .filter-tag').forEach(function(tag) {
-            var href = tag.getAttribute('href');
-            if (!href) return;
-            if (href.indexOf('filter-invert') > -1 || tag.classList.contains('filter-invert')) return;
-            var m = href.match(/types=([^&]+)/);
-            if (m) {
-                var tagTypes = m[1].split(',');
-                if (!selectedTypes) {
-                    tag.classList.toggle('active', tagTypes.length === Object.keys(TYPE_NAMES).length - 1);
-                } else {
-                    // This is approximate — the toggle URL encodes "others", not the selection
-                    tag.classList.remove('active');
-                }
-            } else {
-                tag.classList.toggle('active', !selectedTypes);
-            }
+        // 类型 tags — 通过 data-type 判断
+        var selectedTypes = types ? types.split(',') : null;  // null = 全选
+        panel.querySelectorAll('#section-type .filter-tag[data-type]').forEach(function(tag) {
+            var t = tag.getAttribute('data-type');
+            tag.classList.toggle('active', selectedTypes === null || selectedTypes.indexOf(t) >= 0);
+        });
+        // "全部" tag
+        panel.querySelectorAll('#section-type .filter-tag:not([data-type])').forEach(function(tag) {
+            if (tag.classList.contains('filter-invert')) return;
+            tag.classList.toggle('active', selectedTypes === null);
         });
 
         // 期间 tags
@@ -186,6 +169,12 @@
         // 显示已隐藏
         panel.querySelectorAll('#section-display .filter-tag').forEach(function(tag) {
             tag.classList.toggle('active', showHidden === '1');
+            // 更新 href 指向下一次 toggle
+            var p = new URLSearchParams(window.location.search);
+            if (showHidden === '1') { p.delete('show_hidden'); }
+            else { p.set('show_hidden', '1'); }
+            p.delete('fragment'); p.delete('offset');
+            tag.setAttribute('href', '/?' + p.toString());
         });
     }
 
