@@ -19,6 +19,12 @@ _tag_cache = {"data": None, "key": None}
 _artist_cache = {"data": None, "time": 0}
 
 
+def reset_tag_cache():
+    """迁移后清除 tag 缓存。"""
+    _tag_cache["data"] = None
+    _tag_cache["key"] = None
+
+
 def _get_cached_tags(session, query, cache_key):
     """缓存 tag 聚合（走 illustration_tag 索引 DISTINCT）。"""
     if _tag_cache["key"] == cache_key and _tag_cache["data"] is not None:
