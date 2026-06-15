@@ -23,18 +23,8 @@ def resource_path(relative_path):
 
 
 env_file = (PROJECT_ROOT if getattr(sys, 'frozen', False) else APP_DIR) / ".env"
-if not env_file.exists():
-    env_file.write_text("""\
-# Pixiv Tracking Tool configuration
-# First run will guide you through browser OAuth login
-
-HOST=0.0.0.0
-PORT=8000
-# DATA_ROOT=.
-CHECK_INTERVAL_HOURS=6
-""", encoding='utf-8')
-
-load_dotenv(env_file, encoding='utf-8')
+if env_file.exists():
+    load_dotenv(env_file, encoding='utf-8')
 
 
 def _resolve_data_root():

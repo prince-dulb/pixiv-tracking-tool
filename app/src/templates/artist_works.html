@@ -24,8 +24,8 @@
 
         <!-- 作品类型 -->
         <div class="filter-section">
-            <button class="filter-section-title open" data-section="type">作品类型</button>
-            <div class="filter-section-body" id="section-type">
+            <button class="filter-section-title" data-section="type">作品类型</button>
+            <div class="filter-section-body" id="section-type" style="display:none;">
                 <a href="{{ preserve_url(type=None) }}" class="filter-tag {% if not current_type %}active{% endif %}">全部</a>
                 {% for t, label in type_labels.items() %}
                 <a href="{{ preserve_url(type=t) }}" class="filter-tag {% if current_type == t %}active{% endif %}">{{ label }}</a>

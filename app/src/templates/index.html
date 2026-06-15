@@ -24,8 +24,8 @@
 
         <!-- 画师 -->
         <div class="filter-section">
-            <button class="filter-section-title open" data-section="artist">画师</button>
-            <div class="filter-section-body" id="section-artist">
+            <button class="filter-section-title" data-section="artist">画师</button>
+            <div class="filter-section-body" id="section-artist" style="display:none;">
                 <a href="{{ all_url }}" class="filter-tag {% if selected_artist_ids is none %}active{% endif %}">全部</a>
                 {% for a in artists %}
                 <a href="{{ toggle_urls[a.id] }}" class="filter-tag {% if selected_artist_ids is none or a.id in selected_artist_ids %}active{% endif %}" data-artist-id="{{ a.id }}">{{ a.name }}</a>
