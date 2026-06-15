@@ -52,7 +52,7 @@
             <div class="filter-section-body" id="section-tags" style="display:none;">
                 <a href="{{ preserve_url(tags=None) }}" class="filter-tag {% if not selected_tags %}active{% endif %}">全部</a>
                 {% for tag in tag_list %}
-                <a href="{{ preserve_url(tags=tag) }}" class="filter-tag {% if tag in selected_tags %}active{% endif %}" data-tag="{{ tag }}">{{ tag }}</a>
+                <a href="{{ preserve_url(tags=tag) }}" class="filter-tag {% if not selected_tags or tag in selected_tags %}active{% endif %}" data-tag="{{ tag }}">{{ tag }}</a>
                 {% endfor %}
                 <div style="width:100%;display:flex;gap:6px;margin-top:4px;">
                     <input type="text" id="tag-input" placeholder="输入标签…" style="flex:1;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:4px;font-size:13px;">
