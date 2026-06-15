@@ -92,27 +92,12 @@ async def index(request: Request, artist_ids: str = Query(None), types: str = Qu
         artists_list = session.query(TrackedArtist).filter(TrackedArtist.id.in_(illust_artist_ids)).all()
         artists_map = {a.id: a for a in artists_list}
 
-    # Tag 聚合（当前筛选范围内的作品，不含 tag 筛选本身）
-    tag_query = session.query(Illustration.tags)
-    if selected_ids is not None:
-        tag_query = tag_query.filter(Illustration.artist_id.in_(selected_ids))
-    if selected_types is not None:
-        tag_query = tag_query.filter(Illustration.type.in_(selected_types))
-    if not show_hidden:
-        tag_query = tag_query.filter(Illustration.is_hidden != True)
-    # 投稿期间
-    if period and period != 'custom':
-        now = datetime.utcnow()
-        delta_map = {'24h': timedelta(hours=24), 'week': timedelta(days=7),
-                     'month': timedelta(days=30), 'half_year': timedelta(days=183),
-                     'year': timedelta(days=365)}
-        if period in delta_map:
-            tag_query = tag_query.filter(Illustration.posted_at >= now - delta_map[period])
-    elif period == 'custom':
-        if posted_after:
-            tag_query = tag_query.filter(Illustration.posted_at >= posted_after)
-        if posted_before:
-            tag_query = tag_query.filter(Illustration.posted_at <= posted_before + 'T23:59:59')
+    # Tag 聚合：复用主查询的筛选条件，限 500 条扫描
+    tag_query = session.query(Illustration.tags)\
+        .order_by(Illustration.posted_at.desc())\
+        .limit(500)
+    if query.whereclause is not None:
+        tag_query = tag_query.filter(query.whereclause)
 
     all_tags = set()
     for (t,) in tag_query.all():
@@ -528,24 +513,13 @@ async def artist_works(request: Request, artist_id: int, type: str = Query(None)
     illustrations = query.offset(offset).limit(page_size).all()
     has_more = (offset + page_size) < total_count
 
-    # Tag 聚合（该画师 + 当前筛选条件的作品，不含 tag 筛选本身）
-    tag_query = session.query(Illustration.tags).filter_by(artist_id=artist_id)
-    if type and type in TYPE_LABELS:
-        tag_query = tag_query.filter_by(type=type)
-    if not show_hidden:
-        tag_query = tag_query.filter(Illustration.is_hidden != True)
-    if period and period != 'custom':
-        now = datetime.utcnow()
-        delta_map = {'24h': timedelta(hours=24), 'week': timedelta(days=7),
-                     'month': timedelta(days=30), 'half_year': timedelta(days=183),
-                     'year': timedelta(days=365)}
-        if period in delta_map:
-            tag_query = tag_query.filter(Illustration.posted_at >= now - delta_map[period])
-    elif period == 'custom':
-        if posted_after:
-            tag_query = tag_query.filter(Illustration.posted_at >= posted_after)
-        if posted_before:
-            tag_query = tag_query.filter(Illustration.posted_at <= posted_before + 'T23:59:59')
+    # Tag 聚合：复用主查询的筛选条件，限 500 条扫描
+    tag_query = session.query(Illustration.tags)\
+        .filter_by(artist_id=artist_id)\
+        .order_by(Illustration.posted_at.desc())\
+        .limit(500)
+    if query.whereclause is not None:
+        tag_query = tag_query.filter(query.whereclause)
 
     all_tags = set()
     for (t,) in tag_query.all():
