@@ -15,7 +15,7 @@ import gallery_dl.job as gdl_job
 from .client import PixivClient
 from . import config as _cfg
 from . import progress
-from .models import Session, TrackedArtist, Illustration
+from .models import Session, TrackedArtist, Illustration, IllustrationTag
 
 
 def _artist_dir_name(artist):
@@ -432,6 +432,16 @@ class Tracker:
         )
         session.add(illust)
         session.commit()
+
+        # 写入 illustration_tag 表
+        for tag in illust_data["tags"]:
+            session.execute(
+                IllustrationTag.__table__.insert().values(
+                    illustration_id=illust.id, tag=tag
+                ).prefix_with("OR IGNORE")
+            )
+        session.commit()
+
         return illust
 
     def _download_artist(self, user_id, artist_dir=None, task_id=None, clear_archive=False):

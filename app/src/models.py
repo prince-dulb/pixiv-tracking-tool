@@ -69,6 +69,22 @@ class Illustration(Base):
     rating = Column(Integer, default=0)
 
     artist = relationship("TrackedArtist", back_populates="illustrations")
+    tags_rel = relationship("IllustrationTag", cascade="all, delete-orphan")
+
+
+class IllustrationTag(Base):
+    __tablename__ = "illustration_tag"
+
+    illustration_id = Column(Integer, ForeignKey("illustration.id"), primary_key=True)
+    tag = Column(String, primary_key=True, index=True)
+
+
+def _table_exists(dbapi_connection, table):
+    cursor = dbapi_connection.cursor()
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table,))
+    exists = cursor.fetchone() is not None
+    cursor.close()
+    return exists
 
 
 def _column_exists(dbapi_connection, table, column):
@@ -80,13 +96,42 @@ def _column_exists(dbapi_connection, table, column):
 
 
 def _migrate_existing_db():
-    """幂等添加 v0.0.4 之后引入的列。"""
+    """幂等添加 v0.0.4 之后引入的列和表。"""
     with engine.begin() as conn:
         dbapi_connection = conn.connection.driver_connection
         if not _column_exists(dbapi_connection, "illustration", "is_hidden"):
             conn.exec_driver_sql("ALTER TABLE illustration ADD COLUMN is_hidden BOOLEAN DEFAULT 0")
         if not _column_exists(dbapi_connection, "illustration", "is_bookmarked"):
             conn.exec_driver_sql("ALTER TABLE illustration ADD COLUMN is_bookmarked BOOLEAN DEFAULT 0")
+
+        # v0.0.6: illustration_tag 表
+        if not _table_exists(dbapi_connection, "illustration_tag"):
+            conn.exec_driver_sql("""
+                CREATE TABLE illustration_tag (
+                    illustration_id INTEGER NOT NULL,
+                    tag TEXT NOT NULL,
+                    PRIMARY KEY (illustration_id, tag),
+                    FOREIGN KEY (illustration_id) REFERENCES illustration(id)
+                )
+            """)
+            conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS idx_illustration_tag ON illustration_tag(tag)")
+            # 从既有 JSON 数据迁移
+            import json
+            rows = conn.exec_driver_sql("SELECT id, tags FROM illustration WHERE tags IS NOT NULL AND tags != ''").all()
+            if rows:
+                inserts = []
+                for row in rows:
+                    try:
+                        for tag in json.loads(row[1]):
+                            inserts.append({"illustration_id": row[0], "tag": tag})
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+                if inserts:
+                    conn.exec_driver_sql(
+                        "INSERT OR IGNORE INTO illustration_tag (illustration_id, tag) VALUES (:illustration_id, :tag)",
+                        inserts
+                    )
+            print(f"  [migrate] 已从 {len(rows)} 件作品迁移 tag 到 illustration_tag 表")
 
 
 def init_db():

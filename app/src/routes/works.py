@@ -2,7 +2,7 @@ import threading
 from fastapi import APIRouter, Request, Query, Form
 from fastapi.responses import RedirectResponse
 
-from ..models import Session, TrackedArtist, Illustration
+from ..models import Session, TrackedArtist, Illustration, IllustrationTag
 from ..web import templates, get_tracker
 
 router = APIRouter(tags=["works"])
@@ -20,21 +20,14 @@ _artist_cache = {"data": None, "time": 0}
 
 
 def _get_cached_tags(session, query, cache_key):
-    """缓存 tag 聚合结果，同一筛选条件 30 秒内不重复扫描。"""
-    now = __import__('time').time()
+    """缓存 tag 聚合（走 illustration_tag 索引 DISTINCT）。"""
     if _tag_cache["key"] == cache_key and _tag_cache["data"] is not None:
         return _tag_cache["data"]
-    import json
-    tag_query = session.query(Illustration.tags)
+    tag_query = session.query(IllustrationTag.tag).distinct()\
+        .join(Illustration, Illustration.id == IllustrationTag.illustration_id)
     if query.whereclause is not None:
         tag_query = tag_query.filter(query.whereclause)
-    tag_query = tag_query.order_by(Illustration.posted_at.desc()).limit(500)
-    all_tags = set()
-    for (t,) in tag_query.all():
-        if t:
-            for tag in json.loads(t):
-                all_tags.add(tag)
-    result = sorted(all_tags)
+    result = sorted(r[0] for r in tag_query.all())
     _tag_cache["data"] = result
     _tag_cache["key"] = cache_key
     return result
@@ -113,13 +106,13 @@ async def index(request: Request, artist_ids: str = Query(None), types: str = Qu
         if posted_before:
             query = query.filter(Illustration.posted_at <= posted_before + 'T23:59:59')
 
-    # Tag 筛选（OR 逻辑）
+    # Tag 筛选（OR 逻辑，走 illustration_tag 索引）
     selected_tags = set()
     if tags:
         tag_list = [t.strip() for t in tags.split(",") if t.strip()]
         selected_tags = set(tag_list)
-        conditions = [Illustration.tags.like(f'%"{tag}"%') for tag in tag_list]
-        query = query.filter(or_(*conditions))
+        tag_subquery = session.query(IllustrationTag.illustration_id).filter(IllustrationTag.tag.in_(tag_list))
+        query = query.filter(Illustration.id.in_(tag_subquery))
 
     # Fetch +1 extra to check has_more without COUNT query
     illustrations = query.offset(offset).limit(page_size + 1).all()
@@ -534,13 +527,13 @@ async def artist_works(request: Request, artist_id: int, type: str = Query(None)
         if posted_before:
             query = query.filter(Illustration.posted_at <= posted_before + 'T23:59:59')
 
-    # Tag 筛选（OR 逻辑）
+    # Tag 筛选（OR 逻辑，走 illustration_tag 索引）
     selected_tags = set()
     if tags:
         tag_list = [t.strip() for t in tags.split(",") if t.strip()]
         selected_tags = set(tag_list)
-        conditions = [Illustration.tags.like(f'%"{tag}"%') for tag in tag_list]
-        query = query.filter(or_(*conditions))
+        tag_subquery = session.query(IllustrationTag.illustration_id).filter(IllustrationTag.tag.in_(tag_list))
+        query = query.filter(Illustration.id.in_(tag_subquery))
 
     # +1 trick: 免 COUNT 判断 has_more
     illustrations = query.offset(offset).limit(page_size + 1).all()
