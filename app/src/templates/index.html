@@ -100,6 +100,14 @@
     // ── AJAX 筛选：拦截面板内所有 tag 点击 ──
     var TYPE_NAMES = {{ type_labels|tojson }};
     var PERIOD_NAMES = {{ period_labels|tojson }};
+    var ALL_ARTIST_IDS = {{ all_artist_ids|list|tojson }}.map(String);
+    var ALL_TYPE_IDS = Object.keys(TYPE_NAMES);
+
+    function buildUrl(params) {
+        params.delete('fragment'); params.delete('offset');
+        var qs = params.toString();
+        return qs ? '/?' + qs : '/';
+    }
 
     function updateSummary() {
         var params = new URLSearchParams(window.location.search);
@@ -129,28 +137,95 @@
         var period = params.get('period');
         var showHidden = params.get('show_hidden');
 
-        // 画师 tags — 通过 data-artist-id 判断
+        // ── 画师 tags ──
         var selectedArtists = aids ? aids.split(',') : null;  // null = 全选
         panel.querySelectorAll('#section-artist .filter-tag[data-artist-id]').forEach(function(tag) {
             var id = tag.getAttribute('data-artist-id');
-            tag.classList.toggle('active', selectedArtists === null || selectedArtists.indexOf(id) >= 0);
+            var isActive = selectedArtists === null || selectedArtists.indexOf(id) >= 0;
+            tag.classList.toggle('active', isActive);
+            // 更新 href：toggle 此画师在当前选择中的状态
+            var newSet;
+            if (selectedArtists === null) {
+                newSet = ALL_ARTIST_IDS.filter(function(x) { return x !== id; });
+            } else if (selectedArtists.indexOf(id) >= 0) {
+                newSet = selectedArtists.filter(function(x) { return x !== id; });
+            } else {
+                newSet = selectedArtists.concat([id]);
+            }
+            var p = new URLSearchParams(window.location.search);
+            if (newSet.length === 0 || newSet.length === ALL_ARTIST_IDS.length) {
+                p.delete('artist_ids');
+            } else {
+                p.set('artist_ids', newSet.join(','));
+            }
+            tag.setAttribute('href', buildUrl(p));
         });
-        // "全部" tag（无 data-artist-id，非反选）
+        // "全部" tag
         panel.querySelectorAll('#section-artist .filter-tag:not([data-artist-id])').forEach(function(tag) {
             if (tag.classList.contains('filter-invert')) return;
             tag.classList.toggle('active', selectedArtists === null);
+            var p = new URLSearchParams(window.location.search);
+            p.delete('artist_ids');
+            tag.setAttribute('href', buildUrl(p));
+        });
+        // "反选" tag
+        panel.querySelectorAll('#section-artist .filter-invert').forEach(function(tag) {
+            var p = new URLSearchParams(window.location.search);
+            if (selectedArtists === null) {
+                p.set('artist_ids', '');
+            } else {
+                var inverted = ALL_ARTIST_IDS.filter(function(x) { return selectedArtists.indexOf(x) < 0; });
+                if (inverted.length === 0 || inverted.length === ALL_ARTIST_IDS.length) {
+                    p.delete('artist_ids');
+                } else {
+                    p.set('artist_ids', inverted.join(','));
+                }
+            }
+            tag.setAttribute('href', buildUrl(p));
         });
 
-        // 类型 tags — 通过 data-type 判断
-        var selectedTypes = types ? types.split(',') : null;  // null = 全选
+        // ── 类型 tags ──
+        var selectedTypes = types ? types.split(',') : null;
         panel.querySelectorAll('#section-type .filter-tag[data-type]').forEach(function(tag) {
             var t = tag.getAttribute('data-type');
-            tag.classList.toggle('active', selectedTypes === null || selectedTypes.indexOf(t) >= 0);
+            var isActive = selectedTypes === null || selectedTypes.indexOf(t) >= 0;
+            tag.classList.toggle('active', isActive);
+            var newSet;
+            if (selectedTypes === null) {
+                newSet = ALL_TYPE_IDS.filter(function(x) { return x !== t; });
+            } else if (selectedTypes.indexOf(t) >= 0) {
+                newSet = selectedTypes.filter(function(x) { return x !== t; });
+            } else {
+                newSet = selectedTypes.concat([t]);
+            }
+            var p = new URLSearchParams(window.location.search);
+            if (newSet.length === 0 || newSet.length === ALL_TYPE_IDS.length) {
+                p.delete('types');
+            } else {
+                p.set('types', newSet.join(','));
+            }
+            tag.setAttribute('href', buildUrl(p));
         });
-        // "全部" tag
         panel.querySelectorAll('#section-type .filter-tag:not([data-type])').forEach(function(tag) {
             if (tag.classList.contains('filter-invert')) return;
             tag.classList.toggle('active', selectedTypes === null);
+            var p = new URLSearchParams(window.location.search);
+            p.delete('types');
+            tag.setAttribute('href', buildUrl(p));
+        });
+        panel.querySelectorAll('#section-type .filter-invert').forEach(function(tag) {
+            var p = new URLSearchParams(window.location.search);
+            if (selectedTypes === null) {
+                p.set('types', '');
+            } else {
+                var inverted = ALL_TYPE_IDS.filter(function(x) { return selectedTypes.indexOf(x) < 0; });
+                if (inverted.length === 0 || inverted.length === ALL_TYPE_IDS.length) {
+                    p.delete('types');
+                } else {
+                    p.set('types', inverted.join(','));
+                }
+            }
+            tag.setAttribute('href', buildUrl(p));
         });
 
         // 期间 tags
