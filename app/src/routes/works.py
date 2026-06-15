@@ -31,11 +31,10 @@ def _get_cached_tags(session, query, cache_key):
         return _tag_cache["data"]
     # 取最近 500 件作品（受筛选条件限制）的 tag 去重
     sub = session.query(IllustrationTag.illustration_id)\
-        .join(Illustration, Illustration.id == IllustrationTag.illustration_id)\
-        .order_by(Illustration.posted_at.desc())\
-        .limit(500)
+        .join(Illustration, Illustration.id == IllustrationTag.illustration_id)
     if query.whereclause is not None:
         sub = sub.filter(query.whereclause)
+    sub = sub.order_by(Illustration.posted_at.desc()).limit(500)
     tag_query = session.query(IllustrationTag.tag).distinct()\
         .filter(IllustrationTag.illustration_id.in_(sub))
     result = sorted(r[0] for r in tag_query.all())
