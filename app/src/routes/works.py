@@ -29,10 +29,15 @@ def _get_cached_tags(session, query, cache_key):
     """缓存 tag 聚合（走 illustration_tag 索引 DISTINCT）。"""
     if _tag_cache["key"] == cache_key and _tag_cache["data"] is not None:
         return _tag_cache["data"]
-    tag_query = session.query(IllustrationTag.tag).distinct()\
-        .join(Illustration, Illustration.id == IllustrationTag.illustration_id)
+    # 取最近 500 件作品（受筛选条件限制）的 tag 去重
+    sub = session.query(IllustrationTag.illustration_id)\
+        .join(Illustration, Illustration.id == IllustrationTag.illustration_id)\
+        .order_by(Illustration.posted_at.desc())\
+        .limit(500)
     if query.whereclause is not None:
-        tag_query = tag_query.filter(query.whereclause)
+        sub = sub.filter(query.whereclause)
+    tag_query = session.query(IllustrationTag.tag).distinct()\
+        .filter(IllustrationTag.illustration_id.in_(sub))
     result = sorted(r[0] for r in tag_query.all())
     _tag_cache["data"] = result
     _tag_cache["key"] = cache_key
