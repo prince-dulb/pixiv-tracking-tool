@@ -116,30 +116,26 @@ def _migrate_existing_db():
             """)
             conn.exec_driver_sql("CREATE INDEX IF NOT EXISTS idx_illustration_tag ON illustration_tag(tag)")
 
-        # 迁移 JSON 数据到 illustration_tag（幂等：已存在则跳过）
+        # 幂等迁移 JSON → illustration_tag（INSERT OR IGNORE 跳过重复）
         import json
-        existing = conn.exec_driver_sql(
-            "SELECT illustration_id FROM illustration_tag LIMIT 1"
-        ).fetchone()
-        if not existing:
-            rows = conn.exec_driver_sql(
-                "SELECT id, tags FROM illustration WHERE tags IS NOT NULL AND tags != ''"
-            ).all()
-            inserts = []
-            for row in rows:
-                try:
-                    for tag in json.loads(row[1]):
-                        inserts.append({"illustration_id": row[0], "tag": tag})
-                except (json.JSONDecodeError, TypeError):
-                    pass
-            if inserts:
-                conn.exec_driver_sql(
-                    "INSERT OR IGNORE INTO illustration_tag (illustration_id, tag) VALUES (:illustration_id, :tag)",
-                    inserts
-                )
-            print(f"  [migrate] 已从 {len(rows)} 件作品迁移 {len(inserts)} 个 tag 到 illustration_tag 表")
-            from .routes.works import reset_tag_cache
-            reset_tag_cache()
+        rows = conn.exec_driver_sql(
+            "SELECT id, tags FROM illustration WHERE tags IS NOT NULL AND tags != ''"
+        ).all()
+        inserts = []
+        for row in rows:
+            try:
+                for tag in json.loads(row[1]):
+                    inserts.append({"illustration_id": row[0], "tag": tag})
+            except (json.JSONDecodeError, TypeError):
+                pass
+        if inserts:
+            conn.exec_driver_sql(
+                "INSERT OR IGNORE INTO illustration_tag (illustration_id, tag) VALUES (:illustration_id, :tag)",
+                inserts
+            )
+        print(f"  [migrate] illustration_tag: {len(inserts)} 个 tag（来自 {len(rows)} 件作品）")
+        from .routes.works import reset_tag_cache
+        reset_tag_cache()
 
 
 def init_db():
