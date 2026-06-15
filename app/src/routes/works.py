@@ -14,6 +14,44 @@ def _ids_str(ids_set):
     return ",".join(str(x) for x in sorted(ids_set))
 
 
+# ── 内存缓存 ──
+_tag_cache = {"data": None, "key": None}
+_artist_cache = {"data": None, "time": 0}
+
+
+def _get_cached_tags(session, query, cache_key):
+    """缓存 tag 聚合结果，同一筛选条件 30 秒内不重复扫描。"""
+    now = __import__('time').time()
+    if _tag_cache["key"] == cache_key and _tag_cache["data"] is not None:
+        return _tag_cache["data"]
+    import json
+    tag_query = session.query(Illustration.tags)
+    if query.whereclause is not None:
+        tag_query = tag_query.filter(query.whereclause)
+    tag_query = tag_query.order_by(Illustration.posted_at.desc()).limit(500)
+    all_tags = set()
+    for (t,) in tag_query.all():
+        if t:
+            for tag in json.loads(t):
+                all_tags.add(tag)
+    result = sorted(all_tags)
+    _tag_cache["data"] = result
+    _tag_cache["key"] = cache_key
+    return result
+
+
+def _get_cached_artists(session):
+    """缓存画师列表，30 秒有效。"""
+    now = __import__('time').time()
+    if _artist_cache["data"] is not None and now - _artist_cache["time"] < 30:
+        return _artist_cache["data"]
+    artists = session.query(TrackedArtist).filter_by(is_active=True)\
+        .order_by(TrackedArtist.name).all()
+    _artist_cache["data"] = artists
+    _artist_cache["time"] = now
+    return artists
+
+
 @router.get("/")
 async def index(request: Request, artist_ids: str = Query(None), types: str = Query(None),
                 show_hidden: str = Query(None),
@@ -34,7 +72,7 @@ async def index(request: Request, artist_ids: str = Query(None), types: str = Qu
         offset = (page - 1) * page_size
 
     session = Session()
-    all_artists = session.query(TrackedArtist).filter_by(is_active=True).order_by(TrackedArtist.name).all()
+    all_artists = _get_cached_artists(session)
     all_artist_ids = {a.id for a in all_artists}
 
     selected_ids = None  # None = 全选
@@ -83,30 +121,40 @@ async def index(request: Request, artist_ids: str = Query(None), types: str = Qu
         conditions = [Illustration.tags.like(f'%"{tag}"%') for tag in tag_list]
         query = query.filter(or_(*conditions))
 
-    total_count = query.count()
-    illustrations = query.offset(offset).limit(page_size).all()
-    has_more = (offset + page_size) < total_count
+    # Fetch +1 extra to check has_more without COUNT query
+    illustrations = query.offset(offset).limit(page_size + 1).all()
+    has_more = len(illustrations) > page_size
+    if has_more:
+        illustrations = illustrations[:page_size]
+
     illust_artist_ids = {i.artist_id for i in illustrations}
     artists_map = {}
     if illust_artist_ids:
         artists_list = session.query(TrackedArtist).filter(TrackedArtist.id.in_(illust_artist_ids)).all()
         artists_map = {a.id: a for a in artists_list}
-
-    # Tag 聚合：复用主查询的筛选条件，限 500 条扫描
-    tag_query = session.query(Illustration.tags)\
-        .order_by(Illustration.posted_at.desc())
-    if query.whereclause is not None:
-        tag_query = tag_query.filter(query.whereclause)
-    tag_query = tag_query.limit(500)
-
-    all_tags = set()
-    for (t,) in tag_query.all():
-        if t:
-            for tag in json.loads(t):
-                all_tags.add(tag)
-    tag_list_all = sorted(all_tags)
-
     session.close()
+
+    # Fragment: 提前返回，跳过所有后续重计算
+    if fragment == "1":
+        from starlette.responses import HTMLResponse
+        resp = templates.TemplateResponse(request, "gallery_fragment.html", {
+            "illustrations": illustrations,
+            "artists_map": artists_map,
+            "type_labels": TYPE_LABELS,
+            "show_hidden": show_hidden,
+            "selected_artist_ids": selected_ids,
+            "selected_types": selected_types,
+        })
+        resp.headers["X-Has-More"] = "1" if has_more else "0"
+        return resp
+
+    # ── 以下仅完整页面请求执行 ──
+
+    total_count = query.count()
+
+    # Tag 聚合（TTL 缓存）
+    tag_cache_key = str(query.whereclause) + '|' + str(show_hidden) + '|' + str(period)
+    tag_list_all = _get_cached_tags(session, query, tag_cache_key)
 
     def _period_params():
         parts = []
@@ -232,21 +280,6 @@ async def index(request: Request, artist_ids: str = Query(None), types: str = Qu
     if selected_tags:
         filter_summary += ' · 标签:' + ','.join(sorted(selected_tags))
 
-    # Fragment 模式：仅返回卡片 HTML（AJAX 无限滚动）
-    if fragment == "1":
-        from starlette.responses import HTMLResponse
-        resp = templates.TemplateResponse(request, "gallery_fragment.html", {
-            "illustrations": illustrations,
-            "artists_map": artists_map,
-            "type_labels": TYPE_LABELS,
-            "show_hidden": show_hidden,
-            "selected_artist_ids": selected_ids,
-            "selected_types": selected_types,
-        })
-        resp.headers["X-Has-More"] = "1" if has_more else "0"
-        session.close()
-        return resp
-
     # 页码计算（模式 A）
     import math
     current_page = (offset // page_size) + 1 if page_size > 0 else 1
@@ -357,7 +390,7 @@ async def illust_detail(request: Request, illust_id: int,
         back_url = "/" + nav_query
 
     # 为详情页筛选栏准备数据
-    all_artists = session.query(TrackedArtist).filter_by(is_active=True).order_by(TrackedArtist.name).all()
+    all_artists = _get_cached_artists(session)
     all_artist_ids = {a.id for a in all_artists}
     all_type_ids = set(TYPE_LABELS.keys())
     selected_ids = None
@@ -509,26 +542,29 @@ async def artist_works(request: Request, artist_id: int, type: str = Query(None)
         conditions = [Illustration.tags.like(f'%"{tag}"%') for tag in tag_list]
         query = query.filter(or_(*conditions))
 
-    total_count = query.count()
-    illustrations = query.offset(offset).limit(page_size).all()
-    has_more = (offset + page_size) < total_count
-
-    # Tag 聚合：复用主查询的筛选条件，限 500 条扫描
-    tag_query = session.query(Illustration.tags)\
-        .filter_by(artist_id=artist_id)\
-        .order_by(Illustration.posted_at.desc())\
-        .limit(500)
-    if query.whereclause is not None:
-        tag_query = tag_query.filter(query.whereclause)
-
-    all_tags = set()
-    for (t,) in tag_query.all():
-        if t:
-            for tag in json.loads(t):
-                all_tags.add(tag)
-    tag_list_all = sorted(all_tags)
-
+    # +1 trick: 免 COUNT 判断 has_more
+    illustrations = query.offset(offset).limit(page_size + 1).all()
+    has_more = len(illustrations) > page_size
+    if has_more:
+        illustrations = illustrations[:page_size]
     session.close()
+
+    # Fragment 提前返回
+    if fragment == "1":
+        from starlette.responses import HTMLResponse
+        resp = templates.TemplateResponse(request, "artist_fragment.html", {
+            "artist": artist, "illustrations": illustrations,
+            "type_labels": TYPE_LABELS, "current_type": type,
+            "show_hidden": show_hidden,
+        })
+        resp.headers["X-Has-More"] = "1" if has_more else "0"
+        return resp
+
+    # ── 完整页面仅以下 ──
+    total_count = query.count()
+
+    tag_cache_key = str(query.whereclause) + '|' + str(artist_id) + '|' + str(show_hidden) + '|' + str(period)
+    tag_list_all = _get_cached_tags(session, query, tag_cache_key)
 
     # 通用 URL 构建器
     def _preserve_url(**overrides):
@@ -562,17 +598,6 @@ async def artist_works(request: Request, artist_id: int, type: str = Query(None)
         filter_summary += ' · 含已隐藏'
     if selected_tags:
         filter_summary += ' · 标签:' + ','.join(sorted(selected_tags))
-
-    # Fragment 模式：仅返回卡片 HTML（AJAX 无限滚动）
-    if fragment == "1":
-        from starlette.responses import HTMLResponse
-        resp = templates.TemplateResponse(request, "artist_fragment.html", {
-            "artist": artist, "illustrations": illustrations,
-            "type_labels": TYPE_LABELS, "current_type": type,
-            "show_hidden": show_hidden,
-        })
-        resp.headers["X-Has-More"] = "1" if has_more else "0"
-        return resp
 
     # 构建 show_hidden toggle URL
     def _toggle_url(target_show):

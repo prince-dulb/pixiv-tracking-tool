@@ -19,9 +19,15 @@ def _set_sqlite_pragma(dbapi_connection, connection_record):
     cursor.close()
 
 
+_sessionmaker = None
+
+
 def Session(**kw):
-    """每次调用都使用当前 engine，确保路径变更后自动切换数据库。"""
-    return sessionmaker(bind=engine)(**kw)
+    """复用 sessionmaker，避免每次创建新实例。"""
+    global _sessionmaker
+    if _sessionmaker is None:
+        _sessionmaker = sessionmaker(bind=engine)
+    return _sessionmaker(**kw)
 
 
 class Base(DeclarativeBase):
@@ -90,8 +96,9 @@ def init_db():
 
 def reinit_db():
     """重新初始化数据库连接（数据目录迁移后调用）。"""
-    global engine
+    global engine, _sessionmaker
     engine.dispose()
+    _sessionmaker = None
     from .config import DATABASE_URL, DATA_DIR
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     engine = create_engine(DATABASE_URL, echo=False,
