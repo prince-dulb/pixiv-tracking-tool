@@ -80,6 +80,7 @@
     var panel = document.getElementById('filter-panel');
     var toggle = document.getElementById('filter-toggle');
     var close = document.getElementById('filter-close');
+    var gallery = document.querySelector('.gallery');
 
     toggle.addEventListener('click', function() { panel.style.display = 'flex'; });
     close.addEventListener('click', function() { panel.style.display = 'none'; });
@@ -96,7 +97,269 @@
         });
     });
 
-    // 日期确定按钮
+    // ── AJAX 筛选：拦截面板内所有 tag 点击 ──
+    var TYPE_NAMES = {{ type_labels|tojson }};
+    var PERIOD_NAMES = {{ period_labels|tojson }};
+
+    function updateSummary() {
+        var params = new URLSearchParams(window.location.search);
+        var parts = [];
+        var aids = params.get('artist_ids');
+        if (aids) {
+            parts.push('画师:' + aids.split(',').length + '位');
+        } else {
+            parts.push('画师:全部');
+        }
+        var types = params.get('types');
+        if (types) {
+            parts.push('类型:' + types.split(',').map(function(t) { return TYPE_NAMES[t] || t; }).join(','));
+        } else {
+            parts.push('类型:全部');
+        }
+        var period = params.get('period');
+        parts.push('期间:' + (PERIOD_NAMES[period] || '不限'));
+        if (params.get('show_hidden') === '1') parts.push('含已隐藏');
+        document.querySelector('.filter-summary').textContent = parts.join(' · ');
+    }
+
+    function updateTagStates() {
+        var params = new URLSearchParams(window.location.search);
+        var aids = params.get('artist_ids');
+        var types = params.get('types');
+        var period = params.get('period');
+        var showHidden = params.get('show_hidden');
+
+        // 画师 tags
+        var selectedArtists = aids ? aids.split(',') : null;
+        panel.querySelectorAll('#section-artist .filter-tag').forEach(function(tag) {
+            var href = tag.getAttribute('href');
+            if (!href) return;
+            if (href === '/' || href === '/?') {
+                // "全部" tag
+                tag.classList.toggle('active', !selectedArtists);
+            } else if (href.indexOf('artist_invert') > -1 || tag.classList.contains('filter-invert')) {
+                // 反选 tag — 不处理
+            } else {
+                // Individual artist tag — check if its ID is in the set
+                var m = href.match(/artist_ids=([^&]+)/);
+                if (m) {
+                    var ids = m[1].split(',');
+                    // The toggle URL logic is complex — just skip per-tag highlighting
+                    // for now; the summary text is the primary indicator
+                }
+            }
+        });
+
+        // 类型 tags
+        var selectedTypes = types ? types.split(',') : null;
+        panel.querySelectorAll('#section-type .filter-tag').forEach(function(tag) {
+            var href = tag.getAttribute('href');
+            if (!href) return;
+            if (href.indexOf('filter-invert') > -1 || tag.classList.contains('filter-invert')) return;
+            var m = href.match(/types=([^&]+)/);
+            if (m) {
+                var tagTypes = m[1].split(',');
+                if (!selectedTypes) {
+                    tag.classList.toggle('active', tagTypes.length === Object.keys(TYPE_NAMES).length - 1);
+                } else {
+                    // This is approximate — the toggle URL encodes "others", not the selection
+                    tag.classList.remove('active');
+                }
+            } else {
+                tag.classList.toggle('active', !selectedTypes);
+            }
+        });
+
+        // 期间 tags
+        panel.querySelectorAll('#section-period .filter-tag').forEach(function(tag) {
+            var href = tag.getAttribute('href');
+            if (!href) return;
+            if (href.indexOf('filter-invert') > -1) return;
+            var m = href.match(/period=([^&]+)/);
+            if (m) {
+                tag.classList.toggle('active', m[1] === period);
+            } else {
+                tag.classList.toggle('active', !period);
+            }
+        });
+
+        // 显示已隐藏
+        panel.querySelectorAll('#section-display .filter-tag').forEach(function(tag) {
+            tag.classList.toggle('active', showHidden === '1');
+        });
+    }
+
+    function rebindBookmarks() {
+        document.querySelectorAll('.card-bookmark-btn').forEach(function(btn) {
+            if (btn._bound) return;
+            btn._bound = true;
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                var illustId = this.getAttribute('data-illust-id');
+                var wasBookmarked = this.classList.contains('bookmarked');
+                this.classList.toggle('bookmarked');
+                this.innerHTML = this.classList.contains('bookmarked') ? '&#9829;' : '&#9825;';
+                this.title = this.classList.contains('bookmarked') ? '取消收藏' : '收藏';
+                fetch('/illust/' + illustId + '/bookmark', { method: 'POST' })
+                    .then(function(r) { return r.json(); })
+                    .then(function(data) {
+                        if (!data.ok) {
+                            if (wasBookmarked) { btn.classList.add('bookmarked'); btn.innerHTML = '&#9829;'; }
+                            else { btn.classList.remove('bookmarked'); btn.innerHTML = '&#9825;'; }
+                            showToast(data.error || '收藏操作失败', 'error');
+                        }
+                    })
+                    .catch(function() {
+                        if (wasBookmarked) { btn.classList.add('bookmarked'); btn.innerHTML = '&#9829;'; }
+                        else { btn.classList.remove('bookmarked'); btn.innerHTML = '&#9825;'; }
+                        showToast('网络错误，请重试', 'error');
+                    });
+            });
+        });
+    }
+
+    var _scrollObserver = null;
+    var _scrollSentinel = null;
+
+    function resetInfiniteScroll() {
+        // Remove old observer and sentinel
+        if (_scrollObserver) _scrollObserver.disconnect();
+        if (_scrollSentinel && _scrollSentinel.parentNode) _scrollSentinel.remove();
+        _scrollObserver = null;
+        _scrollSentinel = null;
+
+        var mode = '{{ pagination_mode }}';
+        if (mode !== 'scroll') return;
+
+        var g = document.querySelector('.gallery');
+        if (!g) return;
+
+        var hasMore = {{ 'true' if has_more else 'false' }};
+        var pageSize = {{ page_size }};
+        var maxItems = {{ max_visible_items }};
+        var totalLoaded = pageSize;
+        var offset = 0;
+        var loading = false;
+        var lastFetchTime = 0;
+
+        _scrollSentinel = document.createElement('div');
+        _scrollSentinel.id = 'scroll-sentinel';
+        g.appendChild(_scrollSentinel);
+
+        function countPendingImages() {
+            var imgs = g.querySelectorAll('img');
+            var pending = 0;
+            for (var i = Math.max(0, imgs.length - pageSize * 2); i < imgs.length; i++) {
+                if (imgs[i] && !imgs[i].complete) pending++;
+            }
+            return pending;
+        }
+
+        _scrollObserver = new IntersectionObserver(function(entries) {
+            if (!entries[0].isIntersecting || !hasMore || loading) return;
+            if (maxItems && totalLoaded >= maxItems) { hasMore = false; _scrollSentinel.remove(); return; }
+            if (countPendingImages() > 10) return;
+            var now = Date.now();
+            if (now - lastFetchTime < 1000) return;
+            lastFetchTime = now;
+            loading = true;
+            offset += pageSize;
+            document.getElementById('load-spinner').style.display = 'block';
+
+            var params = new URLSearchParams(window.location.search);
+            params.set('offset', offset);
+            params.set('fragment', '1');
+
+            fetch('/?' + params.toString())
+                .then(function(r) { hasMore = r.headers.get('X-Has-More') === '1'; return r.text(); })
+                .then(function(html) {
+                    document.getElementById('load-spinner').style.display = 'none';
+                    _scrollSentinel.insertAdjacentHTML('beforebegin', html);
+                    totalLoaded += pageSize;
+                    loading = false;
+                    if (!hasMore || (maxItems && totalLoaded >= maxItems)) _scrollSentinel.remove();
+                    rebindBookmarks();
+                })
+                .catch(function() {
+                    document.getElementById('load-spinner').style.display = 'none';
+                    loading = false;
+                    offset -= pageSize;
+                });
+        }, {rootMargin: '600px'});
+        _scrollObserver.observe(_scrollSentinel);
+    }
+
+    // AJAX 筛选 — 点击任意 tag
+    panel.querySelectorAll('.filter-section-body .filter-tag').forEach(function(tag) {
+        tag.addEventListener('click', function(e) {
+            e.preventDefault();
+            var href = this.getAttribute('href');
+            if (!href || href === '#') return;
+
+            // Build fragment URL
+            var sep = href.indexOf('?') >= 0 ? '&' : '?';
+            var fragmentUrl = href + sep + 'fragment=1&offset=0';
+            if (href === '/') fragmentUrl = '/?fragment=1&offset=0';
+
+            var spinner = document.getElementById('load-spinner');
+            if (spinner) spinner.style.display = 'block';
+
+            fetch(fragmentUrl)
+                .then(function(r) { return r.text(); })
+                .then(function(html) {
+                    if (spinner) spinner.style.display = 'none';
+                    html = html.trim();
+
+                    var galleryEl = document.querySelector('.gallery');
+                    var emptyEl = document.querySelector('.empty');
+                    var paginationEl = document.querySelector('.pagination');
+
+                    if (html) {
+                        // Has results
+                        if (emptyEl) emptyEl.remove();
+                        if (paginationEl) paginationEl.style.display = 'none';
+                        if (!galleryEl) {
+                            galleryEl = document.createElement('div');
+                            galleryEl.className = 'gallery';
+                            var loadSpinner = document.getElementById('load-spinner');
+                            loadSpinner.parentNode.insertBefore(galleryEl, loadSpinner);
+                        }
+                        galleryEl.innerHTML = html;
+                        galleryEl.style.display = '';
+                    } else {
+                        // No results
+                        if (galleryEl) galleryEl.style.display = 'none';
+                        if (paginationEl) paginationEl.style.display = 'none';
+                        if (!emptyEl) {
+                            emptyEl = document.createElement('div');
+                            emptyEl.className = 'empty';
+                            emptyEl.innerHTML = '<p>没有匹配的作品。</p>';
+                            var ls = document.getElementById('load-spinner');
+                            ls.parentNode.insertBefore(emptyEl, ls);
+                        }
+                        emptyEl.style.display = '';
+                    }
+
+                    // Update URL
+                    var newUrl = href;
+                    history.pushState({}, '', newUrl);
+
+                    // Update UI
+                    updateSummary();
+                    updateTagStates();
+                    rebindBookmarks();
+                    resetInfiniteScroll();
+                    window.scrollTo({top: 0, behavior: 'instant'});
+                })
+                .catch(function() {
+                    if (spinner) spinner.style.display = 'none';
+                    showToast('筛选失败，请重试', 'error');
+                });
+        });
+    });
+
+    // 日期确定按钮 — AJAX 版
     var dateApply = document.getElementById('filter-date-apply');
     if (dateApply) {
         dateApply.addEventListener('click', function() {
@@ -104,10 +367,66 @@
             params.set('period', 'custom');
             params.set('posted_after', document.getElementById('filter-after').value);
             params.set('posted_before', document.getElementById('filter-before').value);
-            params.delete('offset');
-            window.location.search = params.toString();
+            params.set('fragment', '1');
+            params.set('offset', '0');
+
+            var spinner = document.getElementById('load-spinner');
+            if (spinner) spinner.style.display = 'block';
+
+            fetch('/?' + params.toString())
+                .then(function(r) { return r.text(); })
+                .then(function(html) {
+                    if (spinner) spinner.style.display = 'none';
+                    html = html.trim();
+                    var galleryEl = document.querySelector('.gallery');
+                    var emptyEl = document.querySelector('.empty');
+                    if (html) {
+                        if (emptyEl) emptyEl.remove();
+                        if (!galleryEl) {
+                            galleryEl = document.createElement('div');
+                            galleryEl.className = 'gallery';
+                            document.getElementById('load-spinner').parentNode.insertBefore(galleryEl, document.getElementById('load-spinner'));
+                        }
+                        galleryEl.innerHTML = html;
+                        galleryEl.style.display = '';
+                    } else {
+                        if (galleryEl) galleryEl.style.display = 'none';
+                        if (!emptyEl) {
+                            emptyEl = document.createElement('div');
+                            emptyEl.className = 'empty';
+                            emptyEl.innerHTML = '<p>没有匹配的作品。</p>';
+                            document.getElementById('load-spinner').parentNode.insertBefore(emptyEl, document.getElementById('load-spinner'));
+                        }
+                    }
+                    params.delete('fragment');
+                    params.delete('offset');
+                    history.pushState({}, '', '/?' + params.toString());
+                    updateSummary();
+                    updateTagStates();
+                    rebindBookmarks();
+                    resetInfiniteScroll();
+                    window.scrollTo({top: 0});
+                })
+                .catch(function() {
+                    if (spinner) spinner.style.display = 'none';
+                });
         });
     }
+
+    // 初始化无限滚动
+    resetInfiniteScroll();
+
+    // 回到顶部按钮
+    var topBtn = document.getElementById('back-to-top');
+    window.addEventListener('scroll', function() {
+        topBtn.style.display = window.scrollY > window.innerHeight * 2 ? 'block' : 'none';
+    });
+    topBtn.addEventListener('click', function() {
+        window.scrollTo({top: 0, behavior: 'smooth'});
+    });
+
+    // popstate — 浏览器前进/后退时刷新
+    window.addEventListener('popstate', function() { location.reload(); });
 })();
 </script>
 
@@ -224,133 +543,4 @@
 {% endif %}
 
 <button id="back-to-top" class="back-to-top" title="回到顶部">↑</button>
-
-<script>
-(function() {
-    var mode = '{{ pagination_mode }}';
-    if (mode !== 'scroll') return;
-
-    var offset = {{ offset }};
-    var pageSize = {{ page_size }};
-    var hasMore = {{ 'true' if has_more else 'false' }};
-    var maxItems = {{ max_visible_items }};
-    var totalLoaded = {{ illustrations|length }};
-    var loading = false;
-    var lastFetchTime = 0;
-
-    if (maxItems && totalLoaded >= maxItems) hasMore = false;
-
-    var gallery = document.querySelector('.gallery');
-    if (!gallery) return;
-
-    var sentinel = document.createElement('div');
-    sentinel.id = 'scroll-sentinel';
-    gallery.appendChild(sentinel);
-
-    function countPendingImages() {
-        var imgs = gallery.querySelectorAll('img');
-        var pending = 0;
-        for (var i = Math.max(0, imgs.length - pageSize * 2); i < imgs.length; i++) {
-            if (imgs[i] && !imgs[i].complete) pending++;
-        }
-        return pending;
-    }
-
-    var observer = new IntersectionObserver(function(entries) {
-        if (!entries[0].isIntersecting || !hasMore || loading) return;
-
-        // 上限封顶
-        if (maxItems && totalLoaded >= maxItems) {
-            hasMore = false;
-            sentinel.remove();
-            document.getElementById('load-spinner').style.display = 'none';
-            return;
-        }
-
-        // 上一次加载的图片还没就绪，等一等
-        if (countPendingImages() > 10) return;
-
-        // 批次冷却 1 秒
-        var now = Date.now();
-        if (now - lastFetchTime < 1000) return;
-        lastFetchTime = now;
-
-        loading = true;
-        offset += pageSize;
-        document.getElementById('load-spinner').style.display = 'block';
-
-        var params = new URLSearchParams(window.location.search);
-        params.set('offset', offset);
-        params.set('fragment', '1');
-
-        fetch('/?' + params.toString())
-            .then(function(r) {
-                hasMore = r.headers.get('X-Has-More') === '1';
-                return r.text();
-            })
-            .then(function(html) {
-                document.getElementById('load-spinner').style.display = 'none';
-                sentinel.insertAdjacentHTML('beforebegin', html);
-                totalLoaded += pageSize;
-                loading = false;
-                if (!hasMore || (maxItems && totalLoaded >= maxItems)) {
-                    sentinel.remove();
-                }
-                // 重新绑定新卡片上的收藏按钮
-                document.querySelectorAll('.card-bookmark-btn').forEach(function(btn) {
-                    if (btn._bound) return;
-                    btn._bound = true;
-                    btn.addEventListener('click', function(e) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        var illustId = this.getAttribute('data-illust-id');
-                        var wasBookmarked = this.classList.contains('bookmarked');
-                        this.classList.toggle('bookmarked');
-                        this.innerHTML = this.classList.contains('bookmarked') ? '&#9829;' : '&#9825;';
-                        this.title = this.classList.contains('bookmarked') ? '取消收藏' : '收藏';
-                        fetch('/illust/' + illustId + '/bookmark', { method: 'POST' })
-                            .then(function(r) { return r.json(); })
-                            .then(function(data) {
-                                if (!data.ok) {
-                                    if (wasBookmarked) {
-                                        btn.classList.add('bookmarked');
-                                        btn.innerHTML = '&#9829;';
-                                    } else {
-                                        btn.classList.remove('bookmarked');
-                                        btn.innerHTML = '&#9825;';
-                                    }
-                                    showToast(data.error || '收藏操作失败', 'error');
-                                }
-                            })
-                            .catch(function() {
-                                if (wasBookmarked) {
-                                    btn.classList.add('bookmarked');
-                                    btn.innerHTML = '&#9829;';
-                                } else {
-                                    btn.classList.remove('bookmarked');
-                                    btn.innerHTML = '&#9825;';
-                                }
-                                showToast('网络错误，请重试', 'error');
-                            });
-                    });
-                });
-            })
-            .catch(function() {
-                document.getElementById('load-spinner').style.display = 'none';
-                loading = false;
-                offset -= pageSize;
-            });
-    }, {rootMargin: '600px'});
-    observer.observe(sentinel);
-
-    // 回到顶部按钮
-    var topBtn = document.getElementById('back-to-top');
-    window.addEventListener('scroll', function() {
-        topBtn.style.display = window.scrollY > window.innerHeight * 2 ? 'block' : 'none';
-    });
-    topBtn.addEventListener('click', function() {
-        window.scrollTo({top: 0, behavior: 'smooth'});
-    });
-})();
-</script>
 {% endblock %}
