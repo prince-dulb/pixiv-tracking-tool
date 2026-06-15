@@ -94,10 +94,10 @@ async def index(request: Request, artist_ids: str = Query(None), types: str = Qu
 
     # Tag 聚合：复用主查询的筛选条件，限 500 条扫描
     tag_query = session.query(Illustration.tags)\
-        .order_by(Illustration.posted_at.desc())\
-        .limit(500)
+        .order_by(Illustration.posted_at.desc())
     if query.whereclause is not None:
         tag_query = tag_query.filter(query.whereclause)
+    tag_query = tag_query.limit(500)
 
     all_tags = set()
     for (t,) in tag_query.all():
