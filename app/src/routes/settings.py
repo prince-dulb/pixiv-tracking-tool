@@ -3,7 +3,7 @@ from fastapi.responses import RedirectResponse, JSONResponse
 
 from ..web import get_tracker, templates
 from ..models import Session, TrackedArtist, Illustration
-from ..config import set_data_root, DATA_ROOT as _CFG_DATA_ROOT
+from ..config import set_data_root, set_port, DATA_ROOT as _CFG_DATA_ROOT
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 
@@ -124,6 +124,16 @@ async def update_pagination(page_size: int = Form(200), pagination_mode: str = F
     env_file.write_text('\n'.join(new_lines), encoding='utf-8')
 
     return RedirectResponse("/settings", status_code=303)
+
+
+@router.post("/port")
+async def update_port(port: int = Form(...)):
+    """更新端口号，需要重启才能生效。"""
+    try:
+        set_port(port)
+        return JSONResponse({"ok": True, "message": f"端口已改为 {port}，请手动重启程序使其生效。"})
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)})
 
 
 @router.post("/browse-path")

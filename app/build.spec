@@ -30,7 +30,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='PixivTracker_v0.0.6',
+    name='PixivTracker_v0.0.7',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

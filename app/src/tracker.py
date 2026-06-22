@@ -24,6 +24,15 @@ def _artist_dir_name(artist):
     return f"{safe_name} {artist.pixiv_user_id}"
 
 
+def _natsort_key(f):
+    """自然排序：将文件名中的数字段转为 int，确保 _p10 排在 _p2 之后。"""
+    parts = re.split(r'(\d+)', f.name)
+    key = []
+    for p in parts:
+        key.append(int(p) if p.isdigit() else p.lower())
+    return key
+
+
 def _parse_iso_date(s):
     """将 Pixiv API 返回的 ISO 8601 日期字符串转为 datetime。"""
     try:
@@ -589,7 +598,7 @@ class Tracker:
         for illust in all_illusts:
             paths = []
             if artist_dir.exists():
-                for f in sorted(artist_dir.iterdir()):
+                for f in sorted(artist_dir.iterdir(), key=_natsort_key):
                     name = f.name
                     # 匹配：{id}_p0.png, {id}.gif, {id}.jpg 等
                     if name.startswith(f"{illust.pixiv_illust_id}_p") \

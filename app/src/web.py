@@ -139,13 +139,90 @@ async def serve_image(path: str):
     return Response(status_code=404)
 
 
+def _print_startup_urls():
+    """启动后打印本机可访问链接。"""
+    import socket
+    print(f"\n  Pixiv Tracking Tool 已启动")
+    print(f"  本地访问: http://localhost:{PORT}")
+
+    # 局域网 IPv4
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(('8.8.8.8', 80))
+        lan_ip = s.getsockname()[0]
+        s.close()
+        print(f"  局域网访问: http://{lan_ip}:{PORT}")
+    except Exception:
+        pass
+
+    # IPv6 地址（过滤回环和链路本地）
+    try:
+        hostname = socket.gethostname()
+        addrs = socket.getaddrinfo(hostname, None, socket.AF_INET6)
+        seen = set()
+        for addr in addrs:
+            ip = addr[4][0]
+            # 跳过回环、链路本地、以及去掉 % 作用域 ID 后的重复项
+            if ip.startswith('::1') or ip.startswith('fe80'):
+                continue
+            ip_clean = ip.split('%')[0]
+            if ip_clean not in seen:
+                seen.add(ip_clean)
+                print(f"  IPv6 外网访问: http://[{ip_clean}]:{PORT}")
+    except Exception:
+        pass
+
+    print()
+
+
 def main():
     import uvicorn
     import sys
-    # PyInstaller 打包后不能用 reload 模式
+    import threading
+    import socket as _socket
+
+    def _after_start():
+        import time
+        time.sleep(1.5)
+        _print_startup_urls()
+
+    threading.Thread(target=_after_start, daemon=True).start()
+
     reload = not getattr(sys, 'frozen', False)
-    uvicorn.run("src.web:app" if not getattr(sys, 'frozen', False) else app,
-                host=HOST, port=PORT, reload=reload)
+
+    if reload:
+        # Dev 模式：reload 不支持自定义 socket，单栈启动
+        uvicorn.run("src.web:app", host=HOST, port=PORT, reload=True)
+        return
+
+    # 生产/打包模式：创建 IPv4 + IPv6 双 socket 实现双栈监听
+    config = uvicorn.Config(app, host=None, port=PORT, loop="asyncio")
+    server = uvicorn.Server(config)
+
+    socks = []
+    try:
+        s_v6 = _socket.socket(_socket.AF_INET6, _socket.SOCK_STREAM)
+        s_v6.setsockopt(_socket.IPPROTO_IPV6, _socket.IPV6_V6ONLY, 1)
+        s_v6.bind(('::', PORT))
+        s_v6.listen(2048)
+        socks.append(s_v6)
+    except Exception as e:
+        print(f"  [warn] IPv6 绑定失败: {e}")
+
+    try:
+        s_v4 = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
+        s_v4.setsockopt(_socket.SOL_SOCKET, _socket.SO_REUSEADDR, 1)
+        s_v4.bind(('0.0.0.0', PORT))
+        s_v4.listen(2048)
+        socks.append(s_v4)
+    except Exception as e:
+        print(f"  [warn] IPv4 绑定失败: {e}")
+
+    if not socks:
+        print("  [ERROR] 无法绑定任何地址，退出")
+        return
+
+    server.run(sockets=socks)
 
 
 if __name__ == "__main__":

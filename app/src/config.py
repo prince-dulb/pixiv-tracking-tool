@@ -173,8 +173,31 @@ def set_data_root(new_path):
 PIXIV_REFRESH_TOKEN = os.getenv("PIXIV_REFRESH_TOKEN", "")
 
 # Server
-HOST = os.getenv("HOST", "0.0.0.0")
+HOST = os.getenv("HOST", "::")
 PORT = int(os.getenv("PORT", "8000"))
+
+
+def set_port(new_port):
+    """修改端口号并持久化到 .env，需要重启生效。"""
+    new_port = int(new_port)
+    if env_file.exists():
+        content = env_file.read_text(encoding='utf-8')
+        lines = content.split('\n')
+        updated = False
+        new_lines = []
+        for line in lines:
+            stripped = line.strip()
+            if stripped.startswith('PORT='):
+                new_lines.append(f'PORT={new_port}')
+                updated = True
+            else:
+                new_lines.append(line)
+        if not updated:
+            new_lines.append(f'PORT={new_port}')
+        env_file.write_text('\n'.join(new_lines), encoding='utf-8')
+    os.environ["PORT"] = str(new_port)
+    import src.config
+    src.config.PORT = new_port
 
 # Scheduler
 CHECK_INTERVAL_HOURS = int(os.getenv("CHECK_INTERVAL_HOURS", "6"))

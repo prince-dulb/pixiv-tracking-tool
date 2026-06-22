@@ -134,9 +134,38 @@ document.getElementById('change-path-form').addEventListener('submit', e => {
 </div>
 
 <div class="settings-section">
+    <h3>端口设置</h3>
+    <p>当前端口：<strong>{{ port }}</strong>。修改后需要<strong>重启程序</strong>才能生效。</p>
+    <form id="port-form" style="display:flex;gap:8px;align-items:center;">
+        <input type="number" id="port-input" value="{{ port }}" min="1024" max="65535"
+               style="width:120px;padding:6px 10px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px;">
+        <button type="submit">保存</button>
+    </form>
+    <p id="port-msg" style="display:none;color:var(--accent);font-size:13px;margin-top:8px;"></p>
+</div>
+
+<script>
+document.getElementById('port-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    var port = document.getElementById('port-input').value;
+    var msg = document.getElementById('port-msg');
+    var fd = new FormData();
+    fd.append('port', port);
+    try {
+        var resp = await fetch('/settings/port', { method: 'POST', body: fd });
+        var data = await resp.json();
+        msg.textContent = data.ok ? data.message : ('错误: ' + (data.error || '操作失败'));
+    } catch(e) {
+        msg.textContent = '操作失败，请重试';
+    }
+    msg.style.display = 'block';
+});
+</script>
+
+<div class="settings-section">
     <h3>访问地址</h3>
-    <p>服务运行在端口 {{ port }}。同一网络下的设备可通过以下地址访问：</p>
-    <code>http://&lt;本机IP&gt;:{{ port }}</code>
+    <p>服务运行在端口 {{ port }}。同一网络下的设备可通过局域网地址访问，外网可通过 IPv6 地址访问（需放行防火墙）。</p>
+    <code>http://localhost:{{ port }}</code>
 </div>
 
 {% endblock %}

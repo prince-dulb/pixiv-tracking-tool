@@ -5,11 +5,12 @@ import webbrowser
 if __name__ == "__main__":
     try:
         from src.web import main
+        from src.config import PORT
         # 启动后自动打开浏览器访问画廊
         def open_browser():
             import time
             time.sleep(2)
-            webbrowser.open_new("http://localhost:8000")
+            webbrowser.open_new(f"http://localhost:{PORT}")
 
         import threading
         threading.Thread(target=open_browser, daemon=True).start()
