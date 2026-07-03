@@ -4,11 +4,11 @@
 
 ## 快速开始
 
-1. 双击 `PixivTracker_vX.X.X.exe` 启动
+1. 双击 `PixivTracker_vX.X.X.exe` 启动（启动后无窗口，图标在系统托盘区）
 2. 首次启动会自动弹出浏览器，登录你的 Pixiv 账号完成授权
 3. 浏览器登录成功后确认授权
-4. 打开 http://localhost:8000 进入 Web 界面
-5. 手机也可以访问[你的电脑IP]:8000 进入 Web 界面
+4. 打开 http://localhost:1919 进入 Web 界面
+5. 手机也可以访问 [你的电脑IP]:1919 进入 Web 界面
 
 ## 功能
 
@@ -62,7 +62,7 @@
 ```env
 # 服务端口
 HOST=::
-PORT=8000
+PORT=1919
 
 # 数据存储目录（默认 . 即程序所在目录）
 # DATA_ROOT=.
