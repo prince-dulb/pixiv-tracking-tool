@@ -5,6 +5,7 @@ from fastapi.responses import RedirectResponse
 from ..models import Session, TrackedArtist, Illustration
 from .. import config as _cfg
 from ..web import get_tracker, get_client, templates
+from ..tracker import _sync_artist_name
 
 router = APIRouter(prefix="/artists", tags=["artists"])
 
@@ -135,6 +136,8 @@ def _do_refresh_artist(tracker, artist_id):
     if not artist:
         session.close()
         return
+
+    _sync_artist_name(artist, tracker.client, session)
 
     task_id = progress.begin_task(artist.name)
     progress.begin_phase(task_id, "checking")

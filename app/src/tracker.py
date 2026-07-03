@@ -33,6 +33,64 @@ def _natsort_key(f):
     return key
 
 
+def _merge_and_cleanup(old_dir, new_dir):
+    """将 old_dir 文件合并到 new_dir，同名文件内容一致则删旧，不一致则保留两份。"""
+    import filecmp
+    for f in old_dir.iterdir():
+        if f.is_dir():
+            continue
+        dest = new_dir / f.name
+        if not dest.exists():
+            shutil.move(str(f), str(dest))
+        elif filecmp.cmp(str(f), str(dest), shallow=False):
+            f.unlink()
+        else:
+            alt = new_dir / f"{f.stem}_old{f.suffix}"
+            shutil.move(str(f), str(alt))
+            print(f"  [warn] 文件冲突，保留两份: {f.name} → {alt.name}")
+    try:
+        old_dir.rmdir()
+    except OSError:
+        pass
+
+
+def _sync_artist_name(artist, client, session):
+    """同步画师名：若 Pixiv 名字变更，重命名目录并更新所有 file_paths。"""
+    try:
+        info = client.get_artist_detail(artist.pixiv_user_id)
+        new_name = info.get("name", "").strip()
+    except Exception as e:
+        print(f"  [warn] 获取画师 {artist.name} 信息失败，跳过名称同步: {e}")
+        return
+
+    if not new_name or new_name == artist.name:
+        return
+
+    old_dir_name = _artist_dir_name(artist)
+    artist.name = new_name
+    new_dir_name = _artist_dir_name(artist)
+
+    if old_dir_name == new_dir_name:
+        return
+
+    old_dir = _cfg.IMAGES_DIR / old_dir_name
+    new_dir = _cfg.IMAGES_DIR / new_dir_name
+
+    if old_dir.exists() and not new_dir.exists():
+        shutil.move(str(old_dir), str(new_dir))
+    elif old_dir.exists() and new_dir.exists():
+        _merge_and_cleanup(old_dir, new_dir)
+
+    for illust in artist.illustrations:
+        if illust.file_paths:
+            illust.file_paths = illust.file_paths.replace(
+                f"/images/{old_dir_name}/", f"/images/{new_dir_name}/"
+            )
+
+    session.commit()
+    print(f"  [sync] 画师名已更新: {old_dir_name} → {new_dir_name}")
+
+
 def _parse_iso_date(s):
     """将 Pixiv API 返回的 ISO 8601 日期字符串转为 datetime。"""
     try:
@@ -399,6 +457,8 @@ class Tracker:
 
     def _fetch_new_illusts(self, session, artist):
         """检查并保存画师的新作品。全量拉取后比对，不依赖 API 返回顺序。"""
+        _sync_artist_name(artist, self.client, session)
+
         existing_ids = {
             row[0]
             for row in session.query(Illustration.pixiv_illust_id)
