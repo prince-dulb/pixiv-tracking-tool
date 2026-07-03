@@ -41,6 +41,8 @@ def _resolve_data_root():
 
 def _migrate_to_data_root():
     """首次用新代码启动时：若 .env 有旧的 IMAGES_DIR 但无 DATA_ROOT，自动迁移。"""
+    if not env_file.exists():
+        return
     content = env_file.read_text(encoding='utf-8')
     if any(l.strip().startswith('DATA_ROOT=') for l in content.split('\n')):
         return
@@ -174,7 +176,7 @@ PIXIV_REFRESH_TOKEN = os.getenv("PIXIV_REFRESH_TOKEN", "")
 
 # Server
 HOST = os.getenv("HOST", "::")
-PORT = int(os.getenv("PORT", "8000"))
+PORT = int(os.getenv("PORT", "1919"))
 
 
 def set_port(new_port):
