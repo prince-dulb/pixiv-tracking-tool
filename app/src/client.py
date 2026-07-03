@@ -245,5 +245,6 @@ class PixivClient:
             "view_count": illust.get("total_view", 0),
             "posted_at": illust.get("create_date"),
             "is_bookmarked": illust.get("is_bookmarked", False),
+            "caption": illust.get("caption", ""),
             "urls": urls,
         }

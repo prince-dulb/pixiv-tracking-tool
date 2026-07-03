@@ -441,6 +441,21 @@ button:hover { opacity: 0.9; }
 .empty p { margin-bottom: 8px; }
 .empty a { color: var(--accent); }
 
+/* 作品简介 */
+.illust-caption {
+  max-width: 800px;
+  margin: 16px 0;
+  padding: 16px 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  line-height: 1.8;
+  font-size: 0.95em;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+.illust-caption a { color: var(--accent); }
+
 /* 进度条（检查+下载二合一） */
 .progress-box {
     background: var(--surface);

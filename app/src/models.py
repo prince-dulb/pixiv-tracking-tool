@@ -67,6 +67,7 @@ class Illustration(Base):
     is_hidden = Column(Boolean, default=False)
     is_bookmarked = Column(Boolean, default=False)
     rating = Column(Integer, default=0)
+    caption = Column(Text, default="")
 
     artist = relationship("TrackedArtist", back_populates="illustrations")
     tags_rel = relationship("IllustrationTag", cascade="all, delete-orphan")
@@ -103,6 +104,8 @@ def _migrate_existing_db():
             conn.exec_driver_sql("ALTER TABLE illustration ADD COLUMN is_hidden BOOLEAN DEFAULT 0")
         if not _column_exists(dbapi_connection, "illustration", "is_bookmarked"):
             conn.exec_driver_sql("ALTER TABLE illustration ADD COLUMN is_bookmarked BOOLEAN DEFAULT 0")
+        if not _column_exists(dbapi_connection, "illustration", "caption"):
+            conn.exec_driver_sql("ALTER TABLE illustration ADD COLUMN caption TEXT DEFAULT ''")
 
         # v0.0.6: illustration_tag 表
         if not _table_exists(dbapi_connection, "illustration_tag"):
