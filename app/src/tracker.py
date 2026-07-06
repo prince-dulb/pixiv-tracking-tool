@@ -358,20 +358,15 @@ class Tracker:
                     except Exception as e:
                         progress.add_error(task_id, f"caption {illust.pixiv_illust_id}: {e}")
 
-            # 2. 检查图片文件是否存在，缺失则清空 file_paths 以便 download_pending 重新下载
-            #    若 file_paths 被清空过，尝试从磁盘重建
-            if illust.file_paths:
-                paths = illust.file_paths.split(",")
-                missing = [p for p in paths if not os.path.exists(p.strip())]
-                if missing:
-                    illust.file_paths = None
-                    files_cleared += 1
-            if not illust.file_paths:
-                # 尝试从磁盘重建 file_paths（扫描画师目录匹配该作品文件）
-                rebuilt = _rebuild_file_paths(_cfg.IMAGES_DIR, artist_dir, illust.pixiv_illust_id)
-                if rebuilt:
-                    illust.file_paths = rebuilt
-                    files_cleared -= 1  # 恢复成功，不算缺失
+            # 2. 直接从磁盘重建 file_paths（以磁盘实际文件为唯一真相源）
+            #    跳过基于 web 路径的 os.path.exists 检查——web 路径不是文件系统路径
+            rebuilt = _rebuild_file_paths(_cfg.IMAGES_DIR, artist_dir, illust.pixiv_illust_id)
+            if rebuilt:
+                illust.file_paths = rebuilt
+            elif illust.file_paths:
+                # 磁盘上找不到任何文件 → 清空标记
+                illust.file_paths = None
+                files_cleared += 1
 
             # 每 10 件 commit 一次
             if (i + 1) % 10 == 0:
