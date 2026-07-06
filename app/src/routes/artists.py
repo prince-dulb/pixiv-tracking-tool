@@ -5,7 +5,7 @@ from fastapi.responses import RedirectResponse
 from ..models import Session, TrackedArtist, Illustration
 from .. import config as _cfg
 from ..web import get_tracker, get_client, templates
-from ..tracker import _sync_artist_name
+from ..tracker import _sync_artist_name, _artist_dir_name
 
 router = APIRouter(prefix="/artists", tags=["artists"])
 
@@ -140,6 +140,22 @@ def _do_refresh_artist(tracker, artist_id):
     _sync_artist_name(artist, tracker.client, session)
 
     task_id = progress.begin_task(artist.name)
+
+    # 补拉已有作品的 caption（带进度）
+    artist_dir = _cfg.IMAGES_DIR / _artist_dir_name(artist)
+    no_caption = [
+        ill for ill in artist.illustrations
+        if not (artist_dir / f"{ill.pixiv_illust_id}.caption.html").exists()
+    ]
+    if no_caption:
+        progress.begin_phase(task_id, "syncing")
+        progress.set_files_total(task_id, len(no_caption))
+        progress.set_detail(task_id, "正在拉取作品简介...")
+        for i, ill in enumerate(no_caption):
+            progress.add_files_done(task_id, 1)
+            progress.set_artist(task_id, ill.title or ill.pixiv_illust_id)
+            tracker._fetch_and_save_caption(session, ill)
+
     progress.begin_phase(task_id, "checking")
     progress.set_artist_progress(task_id, 1, 1)
     progress.set_detail(task_id, "正在扫描本地文件...")

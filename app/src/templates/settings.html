@@ -101,18 +101,10 @@ document.getElementById('change-path-form').addEventListener('submit', e => {
 </script>
 
 <div class="settings-section">
-    <h3>下载管理</h3>
-    <p>下载所有尚未下载的作品。</p>
-    <form method="post" action="/settings/download-pending">
-        <button type="submit">下载全部待下载作品</button>
-    </form>
-</div>
-
-<div class="settings-section">
-    <h3>收藏状态同步</h3>
-    <p>从 Pixiv 服务器同步所有已下载作品的收藏状态。此操作在后台运行，可能需要几分钟。</p>
-    <form method="post" action="/settings/sync-bookmarks">
-        <button type="submit">同步收藏状态</button>
+    <h3>校验并补全作品信息</h3>
+    <p>遍历所有已有作品，检查 caption、收藏状态、图片文件等是否缺失，缺损则自动补上。后台运行，可能需要一段时间。</p>
+    <form method="post" action="/settings/validate-and-fix">
+        <button type="submit">校验并补全作品信息</button>
     </form>
 </div>
 

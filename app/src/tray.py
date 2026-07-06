@@ -76,7 +76,7 @@ def run_tray():
     # 日志重定向（必须在任何 print 之前）
     _redirect_stdio(DATA_DIR)
 
-    print(f"[tray] Pixiv Tracking Tool v0.0.8 启动")
+    print(f"[tray] Pixiv Tracking Tool v0.1.0 启动")
     print(f"[tray] 端口: {PORT}")
 
     # 在 daemon 线程启动 Web 服务

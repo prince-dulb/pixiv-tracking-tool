@@ -108,9 +108,11 @@ def get_state():
         checking = [t for t in tasks if t.phase == "checking"]
         all_phases = {t.phase for t in tasks}
 
-        # 阶段优先级：downloading > checking
+        # 阶段优先级：downloading > syncing > checking
         if "downloading" in all_phases:
             phase = "downloading"
+        elif "syncing" in all_phases:
+            phase = "syncing"
         elif "checking" in all_phases:
             phase = "checking"
         else:
@@ -119,9 +121,11 @@ def get_state():
         # 取最近更新的任务的详情
         last = tasks[-1]
 
-        # 文件进度只统计下载阶段的任务
-        dl_files_total = sum(t.files_total for t in downloading)
-        dl_files_done = sum(t.files_done for t in downloading)
+        syncing = [t for t in tasks if t.phase == "syncing"]
+
+        # 文件进度统计下载和同步阶段的任务
+        dl_files_total = sum(t.files_total for t in downloading) + sum(t.files_total for t in syncing)
+        dl_files_done = sum(t.files_done for t in downloading) + sum(t.files_done for t in syncing)
         dl_artist_idx = sum(t.dl_artist_index for t in downloading)
         dl_artist_tot = sum(t.dl_artist_total for t in downloading)
 

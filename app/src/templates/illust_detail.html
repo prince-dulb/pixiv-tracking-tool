@@ -141,8 +141,8 @@
 <a href="/illust/{{ next_id }}{{ nav_query }}" class="side-arrow side-next" title="下一张">&rarr;</a>
 {% endif %}
 {% endif %}
-{% if illust.caption %}
-<div class="illust-caption">{{ illust.caption | safe }}</div>
+{% if caption_html %}
+<div class="illust-caption">{{ caption_html | safe }}</div>
 {% endif %}
 {% else %}
 <div class="empty"><p>尚未下载</p></div>

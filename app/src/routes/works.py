@@ -465,9 +465,21 @@ async def illust_detail(request: Request, illust_id: int,
 
     session.close()
 
+    from .. import config as _cfg
+
+    # 从文件读取 caption（与图片同级，随 DATA_ROOT 迁移）
+    caption_html = ""
+    safe_name = artist.name
+    for ch in r'\/:*?"<>|':
+        safe_name = safe_name.replace(ch, '_')
+    caption_file = _cfg.IMAGES_DIR / f"{safe_name} {artist.pixiv_user_id}" / f"{illust.pixiv_illust_id}.caption.html"
+    if caption_file.exists():
+        caption_html = caption_file.read_text(encoding='utf-8')
+
     return templates.TemplateResponse(
         request, "illust_detail.html",
         {"illust": illust, "artist": artist, "paths": paths,
+         "caption_html": caption_html,
          "page_count": page_count, "tags": tags, "type_labels": TYPE_LABELS,
          "prev_id": prev_id, "next_id": next_id, "nav_query": nav_query,
          "current_idx": current_idx + 1, "total_count": len(all_ids),

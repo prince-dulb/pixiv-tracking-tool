@@ -192,11 +192,11 @@ def main():
 
     if reload:
         # Dev 模式：reload 不支持自定义 socket，单栈启动
-        uvicorn.run("src.web:app", host=HOST, port=PORT, reload=True)
+        uvicorn.run("src.web:app", host=HOST, port=PORT, reload=True, log_level="warning")
         return
 
     # 生产/打包模式：创建 IPv4 + IPv6 双 socket 实现双栈监听
-    config = uvicorn.Config(app, host=None, port=PORT, loop="asyncio")
+    config = uvicorn.Config(app, host=None, port=PORT, loop="asyncio", log_level="warning")
     server = uvicorn.Server(config)
 
     socks = []

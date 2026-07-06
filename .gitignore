@@ -11,3 +11,7 @@ test_images
 test_images/
 .superpowers/
 pixiv_token.json
+.claude/worktrees/
+.obsidian/
+docs/.obsidian/
+manga-image-translator-windows-x86_64/

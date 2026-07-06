@@ -82,13 +82,13 @@ async def change_path(request: Request, new_path: str = Form(...)):
     return JSONResponse({"ok": True})
 
 
-@router.post("/sync-bookmarks")
-async def sync_bookmarks():
-    """全量同步所有已下载作品的收藏状态。后台运行。"""
+@router.post("/validate-and-fix")
+async def validate_and_fix():
+    """校验并补全所有已有作品信息：caption、收藏状态、缺失文件。后台运行。"""
     import threading
     tracker = get_tracker()
     if tracker:
-        threading.Thread(target=tracker.sync_all_bookmarks, daemon=True).start()
+        threading.Thread(target=tracker.validate_and_fix_all, daemon=True).start()
     return RedirectResponse("/settings", status_code=303)
 
 

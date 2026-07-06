@@ -270,6 +270,69 @@ class Tracker:
         progress.finish_task(task_id)
         return total_updated
 
+    def validate_and_fix_all(self):
+        """校验并补全所有已有作品信息：caption、收藏状态、缺失文件。
+        在后台线程中调用；通过 progress 模块报告进度。"""
+        import os
+        import json
+        from . import progress
+
+        session = Session()
+        all_illusts = session.query(Illustration).all()
+        total = len(all_illusts)
+        task_id = progress.begin_task("校验并补全作品信息")
+        progress.begin_phase(task_id, "syncing")
+        progress.set_files_total(task_id, total)
+        progress.set_detail(task_id, "正在校验...")
+
+        caption_filled = 0
+        files_missing = 0
+
+        for i, illust in enumerate(all_illusts):
+            progress.add_files_done(task_id, 1)
+            progress.set_artist(task_id, illust.title or illust.pixiv_illust_id)
+
+            # 1. 补拉 caption
+            caption_file = _cfg.IMAGES_DIR / _artist_dir_name(illust.artist) / f"{illust.pixiv_illust_id}.caption.html"
+            if not caption_file.exists():
+                try:
+                    detail = self.client.get_illust_detail(illust.pixiv_illust_id)
+                    cap = detail.get("caption", "")
+                    if cap:
+                        caption_file.parent.mkdir(parents=True, exist_ok=True)
+                        caption_file.write_text(cap, encoding='utf-8')
+                        caption_filled += 1
+                        progress.set_detail(task_id, f"补拉 caption: {illust.title}")
+                except Exception as e:
+                    progress.add_error(task_id, f"caption {illust.pixiv_illust_id}: {e}")
+
+            # 2. 检查图片文件是否存在
+            if illust.file_paths:
+                try:
+                    paths = json.loads(illust.file_paths)
+                    missing = [p for p in paths if not os.path.exists(p)]
+                    if missing:
+                        files_missing += len(missing)
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            else:
+                # file_paths 为空 = 作品从未被下载
+                pass
+
+            # 每 10 件 commit 一次
+            if (i + 1) % 10 == 0:
+                session.commit()
+
+        session.commit()
+        session.close()
+
+        progress.set_detail(
+            task_id,
+            f"校验完成：补 caption {caption_filled}，缺失文件 {files_missing} 个"
+        )
+        progress.finish_task(task_id)
+        return {"caption_filled": caption_filled, "files_missing": files_missing}
+
     def remove_artist_keep_files(self, artist_id):
         """移除画师：删数据库记录，保留已下载文件。"""
         session = Session()
@@ -451,7 +514,8 @@ class Tracker:
     def _fetch_all_illusts(self, session, artist):
         count = 0
         for illust_data in self.client.get_all_artist_illusts(artist.pixiv_user_id):
-            self._save_illust(session, artist, illust_data)
+            illust = self._save_illust(session, artist, illust_data)
+            self._fetch_and_save_caption(session, illust)
             count += 1
         return count
 
@@ -469,10 +533,11 @@ class Tracker:
         count = 0
         for illust_data in self.client.get_all_artist_illusts(artist.pixiv_user_id):
             if illust_data["illust_id"] not in existing_ids:
-                self._save_illust(session, artist, illust_data)
+                illust = self._save_illust(session, artist, illust_data)
+                self._fetch_and_save_caption(session, illust)
                 count += 1
             else:
-                # 已有作品：同步收藏状态（数据已在手，零额外 API 调用）
+                # 已有作品：同步收藏状态 + 补拉 caption
                 illust = session.query(Illustration).filter_by(
                     pixiv_illust_id=illust_data["illust_id"]
                 ).first()
@@ -480,6 +545,9 @@ class Tracker:
                     api_bookmarked = illust_data.get("is_bookmarked", False)
                     if illust.is_bookmarked != api_bookmarked:
                         illust.is_bookmarked = api_bookmarked
+                    caption_file = _cfg.IMAGES_DIR / _artist_dir_name(artist) / f"{illust.pixiv_illust_id}.caption.html"
+                    if not caption_file.exists():
+                        self._fetch_and_save_caption(session, illust)
         return count
 
     def _save_illust(self, session, artist, illust_data):
@@ -498,7 +566,6 @@ class Tracker:
             view_count=illust_data["view_count"],
             posted_at=posted_at,
             is_bookmarked=illust_data.get("is_bookmarked", False),
-            caption=illust_data.get("caption", ""),
         )
         session.add(illust)
         session.commit()
@@ -513,6 +580,19 @@ class Tracker:
         session.commit()
 
         return illust
+
+    def _fetch_and_save_caption(self, session, illust):
+        """通过 detail API 补拉 caption 并写入 .caption.html 文件。"""
+        try:
+            detail = self.client.get_illust_detail(illust.pixiv_illust_id)
+            caption = detail.get("caption", "")
+            if caption:
+                artist = illust.artist
+                caption_path = _cfg.IMAGES_DIR / _artist_dir_name(artist) / f"{illust.pixiv_illust_id}.caption.html"
+                caption_path.parent.mkdir(parents=True, exist_ok=True)
+                caption_path.write_text(caption, encoding='utf-8')
+        except Exception as e:
+            print(f"  [caption] ✗ {illust.pixiv_illust_id}: {e}")
 
     def _download_artist(self, user_id, artist_dir=None, task_id=None, clear_archive=False):
         """用 gallery-dl 下载画师的全部作品（auto-dedup）。
