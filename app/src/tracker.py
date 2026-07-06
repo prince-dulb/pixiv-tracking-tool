@@ -20,6 +20,25 @@ def _artist_dir_name(artist):
     return f"{safe_name} {artist.pixiv_user_id}"
 
 
+def _rebuild_file_paths(images_dir, dir_name, illust_id):
+    """从磁盘扫描匹配的文件，重建逗号分隔的 web file_paths 字符串。"""
+    import os
+    artist_path = images_dir / dir_name
+    if not artist_path.exists():
+        return None
+    web_prefix = f"/images/{dir_name}"
+    paths = []
+    for f in sorted(artist_path.iterdir(), key=_natsort_key):
+        name = f.name
+        if name.startswith(f"{illust_id}_p") \
+           or name.startswith(f"{illust_id}.") \
+           or name.startswith(f"{illust_id}_"):
+            if name.endswith('.part'):
+                continue
+            paths.append(f"{web_prefix}/{name}")
+    return ",".join(paths) if paths else None
+
+
 def _caption_path(artist, illust_id):
     """返回 `{artist_dir}/{illust_id}.caption.html` 的 Path。"""
     from . import config as _cfg
@@ -290,7 +309,6 @@ class Tracker:
         """校验并补全所有已有作品信息：补拉缺失的 caption，标记缺失图片文件。
         在后台线程中调用；通过 progress 模块报告进度。"""
         import os
-        import json
         from . import progress
 
         session = Session()
@@ -341,17 +359,19 @@ class Tracker:
                         progress.add_error(task_id, f"caption {illust.pixiv_illust_id}: {e}")
 
             # 2. 检查图片文件是否存在，缺失则清空 file_paths 以便 download_pending 重新下载
+            #    若 file_paths 被清空过，尝试从磁盘重建
             if illust.file_paths:
-                try:
-                    paths = json.loads(illust.file_paths)
-                    if paths:
-                        missing = [p for p in paths if not os.path.exists(p)]
-                        if missing:
-                            illust.file_paths = None
-                            files_cleared += 1
-                except (json.JSONDecodeError, TypeError):
+                paths = illust.file_paths.split(",")
+                missing = [p for p in paths if not os.path.exists(p.strip())]
+                if missing:
                     illust.file_paths = None
                     files_cleared += 1
+            if not illust.file_paths:
+                # 尝试从磁盘重建 file_paths（扫描画师目录匹配该作品文件）
+                rebuilt = _rebuild_file_paths(_cfg.IMAGES_DIR, artist_dir, illust.pixiv_illust_id)
+                if rebuilt:
+                    illust.file_paths = rebuilt
+                    files_cleared -= 1  # 恢复成功，不算缺失
 
             # 每 10 件 commit 一次
             if (i + 1) % 10 == 0:
