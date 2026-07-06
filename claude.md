@@ -47,5 +47,6 @@
 ---
 ## 深入文件
 - `docs/DEVELOPMENT_PLAN.md` — 开发计划书（版本路线 + 需求详情）
+- `docs/BUG回报.md` — Bug 追踪表（审查日期 / 严重等级 / 状态 / 描述 / 解决方案）
 - `README.md` — 项目介绍与使用指南
-- data文件夹中有pixiv tpken文件，测试时使用此文件登录
+- data文件夹中有pixiv token文件，测试时使用此文件登录
