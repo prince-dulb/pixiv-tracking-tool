@@ -20,6 +20,26 @@ def _artist_dir_name(artist):
     return f"{safe_name} {artist.pixiv_user_id}"
 
 
+def _caption_path(artist, illust_id):
+    """返回 `{artist_dir}/{illust_id}.caption.html` 的 Path。"""
+    from . import config as _cfg
+    return _cfg.IMAGES_DIR / _artist_dir_name(artist) / f"{illust_id}.caption.html"
+
+
+def _sanitize_caption(html):
+    """移除 caption HTML 中的危险标签和事件属性，防止 XSS。"""
+    if not html:
+        return html
+    # 移除 <script> / <iframe> / <object> / <embed> 整个标签
+    html = re.sub(r'<\s*(script|iframe|object|embed)\b[^>]*>.*?<\s*/\s*\1\s*>', '', html, flags=re.IGNORECASE | re.DOTALL)
+    html = re.sub(r'<\s*(script|iframe|object|embed)\b[^>]*/?>', '', html, flags=re.IGNORECASE)
+    # 移除 on* 事件属性
+    html = re.sub(r'\s+on\w+\s*=\s*"[^"]*"', '', html, flags=re.IGNORECASE)
+    html = re.sub(r"\s+on\w+\s*=\s*'[^']*'", '', html, flags=re.IGNORECASE)
+    html = re.sub(r'\s+on\w+\s*=\s*\S+', '', html, flags=re.IGNORECASE)
+    return html
+
+
 def _natsort_key(f):
     """自然排序：将文件名中的数字段转为 int，确保 _p10 排在 _p2 之后。"""
     parts = re.split(r'(\d+)', f.name)
@@ -280,6 +300,7 @@ class Tracker:
         # 预加载画师信息，避免循环中 N+1 懒加载查询
         artist_ids = {i.artist_id for i in all_illusts}
         artists = session.query(TrackedArtist).filter(TrackedArtist.id.in_(artist_ids)).all()
+        artist_map = {a.id: a for a in artists}
         artist_dir_map = {a.id: _artist_dir_name(a) for a in artists}
         artist_name_map = {a.id: a.name for a in artists}
 
@@ -298,18 +319,26 @@ class Tracker:
             progress.set_artist(task_id, artist_name)
 
             # 1. 补拉 caption
-            caption_file = _cfg.IMAGES_DIR / artist_dir / f"{illust.pixiv_illust_id}.caption.html"
-            if not caption_file.exists():
-                try:
-                    detail = self.client.get_illust_detail(illust.pixiv_illust_id)
-                    cap = detail.get("caption", "")
-                    if cap:
-                        caption_file.parent.mkdir(parents=True, exist_ok=True)
-                        caption_file.write_text(cap, encoding='utf-8')
-                        caption_filled += 1
-                        progress.set_detail(task_id, f"补拉 caption: {illust.title}")
-                except Exception as e:
-                    progress.add_error(task_id, f"caption {illust.pixiv_illust_id}: {e}")
+            artist = artist_map.get(illust.artist_id)
+            if artist:
+                caption_file = _caption_path(artist, illust.pixiv_illust_id)
+                if not caption_file.exists():
+                    try:
+                        detail = self.client.get_illust_detail(illust.pixiv_illust_id)
+                        cap = detail.get("caption", "")
+                        if cap:
+                            caption_file.parent.mkdir(parents=True, exist_ok=True)
+                            caption_file.write_text(_sanitize_caption(cap), encoding='utf-8')
+                            caption_filled += 1
+                            progress.set_detail(task_id, f"补拉 caption: {illust.title}")
+                    except RuntimeError as e:
+                        msg = str(e)
+                        if "尚无此页" in msg or "not found" in msg.lower():
+                            pass  # 作品已删除/私有，静默跳过
+                        else:
+                            progress.add_error(task_id, f"caption {illust.pixiv_illust_id}: {e}")
+                    except Exception as e:
+                        progress.add_error(task_id, f"caption {illust.pixiv_illust_id}: {e}")
 
             # 2. 检查图片文件是否存在，缺失则清空 file_paths 以便 download_pending 重新下载
             if illust.file_paths:
@@ -520,7 +549,7 @@ class Tracker:
         count = 0
         for illust_data in self.client.get_all_artist_illusts(artist.pixiv_user_id):
             illust = self._save_illust(session, artist, illust_data)
-            self._fetch_and_save_caption(session, illust)
+            self._fetch_and_save_caption(illust)
             count += 1
         return count
 
@@ -539,7 +568,7 @@ class Tracker:
         for illust_data in self.client.get_all_artist_illusts(artist.pixiv_user_id):
             if illust_data["illust_id"] not in existing_ids:
                 illust = self._save_illust(session, artist, illust_data)
-                self._fetch_and_save_caption(session, illust)
+                self._fetch_and_save_caption(illust)
                 count += 1
             else:
                 # 已有作品：同步收藏状态（caption 补拉走设置页「校验补全」按钮，不在 refresh 时逐件调 detail API）
@@ -583,16 +612,22 @@ class Tracker:
 
         return illust
 
-    def _fetch_and_save_caption(self, session, illust):
+    def _fetch_and_save_caption(self, illust):
         """通过 detail API 补拉 caption 并写入 .caption.html 文件。"""
         try:
             detail = self.client.get_illust_detail(illust.pixiv_illust_id)
             caption = detail.get("caption", "")
             if caption:
                 artist = illust.artist
-                caption_path = _cfg.IMAGES_DIR / _artist_dir_name(artist) / f"{illust.pixiv_illust_id}.caption.html"
+                caption_path = _caption_path(artist, illust.pixiv_illust_id)
                 caption_path.parent.mkdir(parents=True, exist_ok=True)
-                caption_path.write_text(caption, encoding='utf-8')
+                caption_path.write_text(_sanitize_caption(caption), encoding='utf-8')
+        except RuntimeError as e:
+            msg = str(e)
+            # 作品已删除/私有 — 静默跳过，不算错误
+            if "尚无此页" in msg or "not found" in msg.lower():
+                return
+            print(f"  [caption] ✗ {illust.pixiv_illust_id}: {e}")
         except Exception as e:
             print(f"  [caption] ✗ {illust.pixiv_illust_id}: {e}")
 

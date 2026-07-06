@@ -110,9 +110,9 @@
                     phaseText = '处理中';
                     phaseClass = 'task-pill task-pill-done';
                     pct = 100;
-                } else if (data.phase === 'downloading') {
-                    phaseText = '下载中';
-                    phaseClass = 'task-pill task-pill-dl';
+                } else if (data.phase === 'downloading' || data.phase === 'syncing') {
+                    phaseText = data.phase === 'syncing' ? '同步中' : '下载中';
+                    phaseClass = data.phase === 'syncing' ? 'task-pill task-pill-check' : 'task-pill task-pill-dl';
                     pct = data.files_total > 0 ? Math.round(data.files_done / data.files_total * 100) : 0;
                 } else {
                     phaseText = '检查中';

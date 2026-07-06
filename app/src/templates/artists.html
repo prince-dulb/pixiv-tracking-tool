@@ -55,7 +55,7 @@
             </form>
             <form method="post" action="/artists/{{ artist.id }}/toggle" style="display:inline">
                 <button type="submit" class="btn-sm {% if artist.is_active %}btn-warn{% else %}btn-ok{% endif %}">
-                    {{ "暂停" if artist.is_active else "恢复" }}
+                    {{ "暂停同步" if artist.is_active else "解除暂停同步" }}
                 </button>
             </form>
             <form method="post" action="/artists/{{ artist.id }}/remove-keep-files" style="display:inline" onsubmit="return confirm('仅移除 {{ artist.name|replace("'", "\\'") }} 的数据库记录？已下载的文件会保留在磁盘上。')">

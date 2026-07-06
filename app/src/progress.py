@@ -1,12 +1,16 @@
 """线程安全的进度追踪模块。支持多任务并发——每个任务有独立 ID，API 返回聚合进度。"""
 import threading
+import time
 import uuid
 from dataclasses import dataclass, field
+
+_TASK_TTL = 1800  # 30 分钟，超时自动清理
 
 
 @dataclass
 class _Task:
     task_id: str
+    created_at: float = field(default_factory=time.time)
     phase: str = "checking"
     current_artist: str = ""
     current_detail: str = ""
@@ -100,6 +104,12 @@ def finish_task(task_id):
 
 def get_state():
     with _lock:
+        # 清理超时任务（线程崩溃未调用 finish_task 的残留）
+        now = time.time()
+        expired = [tid for tid, t in _tasks.items() if now - t.created_at > _TASK_TTL]
+        for tid in expired:
+            _tasks.pop(tid, None)
+
         if not _tasks:
             return _empty_state()
 
