@@ -1,15 +1,11 @@
-import collections
 import json
 import os
 import io
 import re
 import shutil
 import zipfile
-from datetime import datetime, timezone
-from PIL import Image
-from sqlalchemy import and_
+from datetime import datetime
 
-import gallery_dl.config as gdl_config
 import gallery_dl.job as gdl_job
 
 from .client import PixivClient

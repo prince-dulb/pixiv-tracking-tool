@@ -480,7 +480,7 @@ async def illust_detail(request: Request, illust_id: int,
         request, "illust_detail.html",
         {"illust": illust, "artist": artist, "paths": paths,
          "caption_html": caption_html,
-         "page_count": page_count, "tags": tags, "type_labels": TYPE_LABELS,
+         "page_count": page_count, "tags": tags,
          "prev_id": prev_id, "next_id": next_id, "nav_query": nav_query,
          "current_idx": current_idx + 1, "total_count": len(all_ids),
          "back_url": back_url,
@@ -508,8 +508,6 @@ async def artist_works(request: Request, artist_id: int, type: str = Query(None)
     show_hidden = show_hidden in ("1", "true")
     from .. import config as _cfg
     from datetime import datetime, timedelta
-    from sqlalchemy import or_
-    import json
 
     page_size = _cfg.PAGE_SIZE
     if page is not None and page > 0:
@@ -566,7 +564,6 @@ async def artist_works(request: Request, artist_id: int, type: str = Query(None)
 
     # Fragment 提前返回
     if fragment == "1":
-        from starlette.responses import HTMLResponse
         resp = templates.TemplateResponse(request, "artist_fragment.html", {
             "artist": artist, "illustrations": illustrations,
             "type_labels": TYPE_LABELS, "current_type": type,

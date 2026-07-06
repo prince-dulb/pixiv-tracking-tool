@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from .config import HOST, PORT, PROJECT_ROOT, resource_path
+from .config import HOST, PORT, resource_path
 from . import config as _cfg
 from .models import init_db
 from .auth import auth, get_pending_login_url, submit_oauth_code, validate_oauth_input

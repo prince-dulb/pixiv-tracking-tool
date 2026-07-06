@@ -2,10 +2,7 @@ import json
 import threading
 import time
 import requests
-from pathlib import Path
-
 from . import config as _cfg
-from .auth import CLIENT_ID, CLIENT_SECRET, HASH_SECRET
 
 
 def _token_file():

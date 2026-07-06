@@ -5,7 +5,7 @@ from fastapi.responses import RedirectResponse
 from ..models import Session, TrackedArtist, Illustration
 from .. import config as _cfg
 from ..web import get_tracker, get_client, templates
-from ..tracker import _sync_artist_name, _artist_dir_name
+from ..tracker import _sync_artist_name
 
 router = APIRouter(prefix="/artists", tags=["artists"])
 
@@ -79,7 +79,6 @@ async def add_artist(request: Request, user_id: str = Form(...)):
         )
 
     # 后台拉取作品和下载，不阻塞页面
-    import threading
     threading.Thread(target=tracker.fetch_artist, args=(artist.id,), daemon=True).start()
 
     return RedirectResponse("/artists", status_code=303)
@@ -152,7 +151,7 @@ def _do_refresh_artist(tracker, artist_id):
     pending = (
         session.query(Illustration)
         .filter_by(artist_id=artist.id)
-        .filter(Illustration.file_paths == None)
+        .filter(Illustration.file_paths.is_(None))
         .all()
     )
 
