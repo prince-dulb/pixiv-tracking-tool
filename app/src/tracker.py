@@ -328,7 +328,6 @@ class Tracker:
         progress.set_detail(task_id, "正在校验...")
 
         caption_filled = 0
-        files_cleared = 0
 
         for i, illust in enumerate(all_illusts):
             progress.add_files_done(task_id, 1)
@@ -358,29 +357,25 @@ class Tracker:
                     except Exception as e:
                         progress.add_error(task_id, f"caption {illust.pixiv_illust_id}: {e}")
 
-            # 2. 直接从磁盘重建 file_paths（以磁盘实际文件为唯一真相源）
-            #    跳过基于 web 路径的 os.path.exists 检查——web 路径不是文件系统路径
-            rebuilt = _rebuild_file_paths(_cfg.IMAGES_DIR, artist_dir, illust.pixiv_illust_id)
-            if rebuilt:
-                illust.file_paths = rebuilt
-            elif illust.file_paths:
-                # 磁盘上找不到任何文件 → 清空标记
-                illust.file_paths = None
-                files_cleared += 1
+            # 2. file_paths 重建由下方的 per-artist _update_file_paths 统一处理
+            pass
 
             # 每 10 件 commit 一次
             if (i + 1) % 10 == 0:
                 session.commit()
 
+        # 逐画师从磁盘重建 file_paths
+        progress.set_detail(task_id, "正在重建文件索引...")
+        for artist in artists:
+            self._update_file_paths(session, artist)
+
         session.commit()
         session.close()
 
         msg = f"校验完成：补 caption {caption_filled}"
-        if files_cleared:
-            msg += f"，标记待重下 {files_cleared} 件"
         progress.set_detail(task_id, msg)
         progress.finish_task(task_id)
-        return {"caption_filled": caption_filled, "files_cleared": files_cleared}
+        return {"caption_filled": caption_filled}
 
     def remove_artist_keep_files(self, artist_id):
         """移除画师：删数据库记录，保留已下载文件。"""
