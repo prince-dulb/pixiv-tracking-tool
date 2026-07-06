@@ -271,7 +271,7 @@ class Tracker:
         return total_updated
 
     def validate_and_fix_all(self):
-        """校验并补全所有已有作品信息：caption、收藏状态、缺失文件。
+        """校验并补全所有已有作品信息：补拉缺失的 caption，标记缺失图片文件。
         在后台线程中调用；通过 progress 模块报告进度。"""
         import os
         import json
@@ -280,20 +280,29 @@ class Tracker:
         session = Session()
         all_illusts = session.query(Illustration).all()
         total = len(all_illusts)
+
+        # 预加载画师信息，避免循环中 N+1 懒加载查询
+        artist_ids = {i.artist_id for i in all_illusts}
+        artists = session.query(TrackedArtist).filter(TrackedArtist.id.in_(artist_ids)).all()
+        artist_dir_map = {a.id: _artist_dir_name(a) for a in artists}
+        artist_name_map = {a.id: a.name for a in artists}
+
         task_id = progress.begin_task("校验并补全作品信息")
         progress.begin_phase(task_id, "syncing")
         progress.set_files_total(task_id, total)
         progress.set_detail(task_id, "正在校验...")
 
         caption_filled = 0
-        files_missing = 0
+        files_cleared = 0
 
         for i, illust in enumerate(all_illusts):
             progress.add_files_done(task_id, 1)
-            progress.set_artist(task_id, illust.title or illust.pixiv_illust_id)
+            artist_dir = artist_dir_map.get(illust.artist_id, f"unknown_{illust.artist_id}")
+            artist_name = artist_name_map.get(illust.artist_id, str(illust.artist_id))
+            progress.set_artist(task_id, artist_name)
 
             # 1. 补拉 caption
-            caption_file = _cfg.IMAGES_DIR / _artist_dir_name(illust.artist) / f"{illust.pixiv_illust_id}.caption.html"
+            caption_file = _cfg.IMAGES_DIR / artist_dir / f"{illust.pixiv_illust_id}.caption.html"
             if not caption_file.exists():
                 try:
                     detail = self.client.get_illust_detail(illust.pixiv_illust_id)
@@ -306,18 +315,18 @@ class Tracker:
                 except Exception as e:
                     progress.add_error(task_id, f"caption {illust.pixiv_illust_id}: {e}")
 
-            # 2. 检查图片文件是否存在
+            # 2. 检查图片文件是否存在，缺失则清空 file_paths 以便 download_pending 重新下载
             if illust.file_paths:
                 try:
                     paths = json.loads(illust.file_paths)
-                    missing = [p for p in paths if not os.path.exists(p)]
-                    if missing:
-                        files_missing += len(missing)
+                    if paths:
+                        missing = [p for p in paths if not os.path.exists(p)]
+                        if missing:
+                            illust.file_paths = None
+                            files_cleared += 1
                 except (json.JSONDecodeError, TypeError):
-                    pass
-            else:
-                # file_paths 为空 = 作品从未被下载
-                pass
+                    illust.file_paths = None
+                    files_cleared += 1
 
             # 每 10 件 commit 一次
             if (i + 1) % 10 == 0:
@@ -326,12 +335,12 @@ class Tracker:
         session.commit()
         session.close()
 
-        progress.set_detail(
-            task_id,
-            f"校验完成：补 caption {caption_filled}，缺失文件 {files_missing} 个"
-        )
+        msg = f"校验完成：补 caption {caption_filled}"
+        if files_cleared:
+            msg += f"，标记待重下 {files_cleared} 件"
+        progress.set_detail(task_id, msg)
         progress.finish_task(task_id)
-        return {"caption_filled": caption_filled, "files_missing": files_missing}
+        return {"caption_filled": caption_filled, "files_cleared": files_cleared}
 
     def remove_artist_keep_files(self, artist_id):
         """移除画师：删数据库记录，保留已下载文件。"""

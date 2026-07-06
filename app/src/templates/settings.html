@@ -102,7 +102,7 @@ document.getElementById('change-path-form').addEventListener('submit', e => {
 
 <div class="settings-section">
     <h3>校验并补全作品信息</h3>
-    <p>遍历所有已有作品，检查 caption、收藏状态、图片文件等是否缺失，缺损则自动补上。后台运行，可能需要一段时间。</p>
+    <p>遍历所有已有作品，检查并补拉缺失的 caption（作品简介）。缺失图片文件的作品将被标记为未下载状态，后续可通过「立即检查更新」重新下载。</p>
     <form method="post" action="/settings/validate-and-fix">
         <button type="submit">校验并补全作品信息</button>
     </form>
