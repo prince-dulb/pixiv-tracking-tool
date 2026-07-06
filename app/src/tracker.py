@@ -537,7 +537,7 @@ class Tracker:
                 self._fetch_and_save_caption(session, illust)
                 count += 1
             else:
-                # 已有作品：同步收藏状态 + 补拉 caption
+                # 已有作品：同步收藏状态（caption 补拉走设置页「校验补全」按钮，不在 refresh 时逐件调 detail API）
                 illust = session.query(Illustration).filter_by(
                     pixiv_illust_id=illust_data["illust_id"]
                 ).first()
@@ -545,9 +545,6 @@ class Tracker:
                     api_bookmarked = illust_data.get("is_bookmarked", False)
                     if illust.is_bookmarked != api_bookmarked:
                         illust.is_bookmarked = api_bookmarked
-                    caption_file = _cfg.IMAGES_DIR / _artist_dir_name(artist) / f"{illust.pixiv_illust_id}.caption.html"
-                    if not caption_file.exists():
-                        self._fetch_and_save_caption(session, illust)
         return count
 
     def _save_illust(self, session, artist, illust_data):
