@@ -792,7 +792,8 @@ class Tracker:
                     if name.startswith(f"{illust.pixiv_illust_id}_p") \
                        or name.startswith(f"{illust.pixiv_illust_id}.") \
                        or name.startswith(f"{illust.pixiv_illust_id}_"):
-                        if name.endswith('.part') or name.endswith('.html'):
-                            continue  # 跳过未完成的下载和 caption 文件
+                        ext = f.suffix.lower()
+                        if ext not in ('.jpg', '.jpeg', '.png', '.gif', '.mp4', '.webp', '.bmp'):
+                            continue  # 跳过非图片/视频文件（.html, .part, .json 等）
                         paths.append(f"{web_prefix}/{name}")
             illust.file_paths = ",".join(paths) if paths else None
