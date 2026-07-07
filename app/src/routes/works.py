@@ -709,6 +709,27 @@ async def delete_illust(illust_id: int, redirect_url: str = Form("/")):
     return RedirectResponse(redirect_url, status_code=303)
 
 
+@router.post("/illust/{illust_id}/download-single")
+async def download_single_illust(illust_id: int):
+    """为未下载的作品触发下载（复用已有下载流程，gallery-dl 自动去重）。"""
+    session = Session()
+    illust = session.query(Illustration).get(illust_id)
+    if not illust:
+        session.close()
+        return JSONResponse({"ok": False, "error": "作品不存在"}, status_code=404)
+    artist = session.query(TrackedArtist).get(illust.artist_id)
+    session.close()
+    if not artist:
+        return JSONResponse({"ok": False, "error": "画师不存在"}, status_code=404)
+
+    tracker = get_tracker()
+    if not tracker:
+        return JSONResponse({"ok": False, "error": "未登录 Pixiv"}, status_code=503)
+
+    threading.Thread(target=tracker.download_single_artist, args=(artist.id,), daemon=True).start()
+    return JSONResponse({"ok": True})
+
+
 @router.post("/illust/{illust_id}/open-folder")
 async def open_illust_folder(illust_id: int):
     """在 Windows 资源管理器中打开作品所在的本地目录。"""

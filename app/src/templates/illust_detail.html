@@ -146,7 +146,43 @@
 <div class="illust-caption">{{ caption_html | safe }}</div>
 {% endif %}
 {% else %}
-<div class="empty"><p>尚未下载</p></div>
+<div class="empty">
+    <p>尚未下载</p>
+    <button id="download-now-btn" class="btn-sm btn-ok" style="margin-top:8px;"
+            data-illust-id="{{ illust.id }}">下载此作品</button>
+    <span id="download-msg" style="display:none;margin-left:8px;font-size:13px;color:var(--accent);"></span>
+</div>
+<script>
+(function() {
+    var btn = document.getElementById('download-now-btn');
+    if (!btn) return;
+    var msg = document.getElementById('download-msg');
+    btn.addEventListener('click', function() {
+        btn.disabled = true;
+        btn.textContent = '提交中...';
+        fetch('/illust/' + this.getAttribute('data-illust-id') + '/download-single', { method: 'POST' })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.ok) {
+                    msg.textContent = '已加入下载队列，等待进度条完成即可';
+                    msg.style.display = 'inline';
+                    btn.style.display = 'none';
+                } else {
+                    msg.textContent = data.error || '提交失败';
+                    msg.style.display = 'inline';
+                    btn.disabled = false;
+                    btn.textContent = '下载此作品';
+                }
+            })
+            .catch(function() {
+                msg.textContent = '网络错误';
+                msg.style.display = 'inline';
+                btn.disabled = false;
+                btn.textContent = '下载此作品';
+            });
+    });
+})();
+</script>
 {% endif %}
 
 {% if prev_id or next_id %}

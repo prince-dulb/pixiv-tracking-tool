@@ -489,6 +489,48 @@ class Tracker:
         progress.finish_task(task_id)
         return results
 
+    def download_single_artist(self, artist_id):
+        """下载指定画师的缺失作品（跳过元数据重拉，直接扫描磁盘+下载）。"""
+        session = Session()
+        artist = session.query(TrackedArtist).get(artist_id)
+        if not artist:
+            session.close()
+            return
+
+        task_id = progress.begin_task(artist.name)
+        progress.begin_phase(task_id, "checking")
+        progress.set_artist_progress(task_id, 1, 1)
+        progress.set_detail(task_id, f"正在扫描 {artist.name} 的本地文件...")
+
+        self._update_file_paths(session, artist)
+        session.commit()
+
+        pending = (
+            session.query(Illustration)
+            .filter_by(artist_id=artist.id)
+            .filter(Illustration.file_paths == None)
+            .all()
+        )
+
+        if pending:
+            progress.begin_phase(task_id, "downloading")
+            progress.set_detail(task_id, f"正在下载 {artist.name} 的缺失作品...")
+            try:
+                safe_name = artist.name
+                for ch in r'\/:*?"<>|':
+                    safe_name = safe_name.replace(ch, '_')
+                artist_dir = str(_cfg.IMAGES_DIR / f"{safe_name} {artist.pixiv_user_id}")
+                self._download_artist(artist.pixiv_user_id, artist_dir=artist_dir, task_id=task_id)
+            except Exception as e:
+                progress.add_error(task_id, f"下载 {artist.name}: {e}")
+
+            self._update_file_paths(session, artist)
+            self._convert_ugoira_zips(session, artist)
+            session.commit()
+
+        session.close()
+        progress.finish_task(task_id)
+
     def download_pending(self):
         """下载所有缺失文件的作品。先扫描全部画师，再统一下载。"""
         session = Session()
