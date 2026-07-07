@@ -348,18 +348,33 @@
         var totalLoaded = pageSize;
         var offset = 0;
         var loading = false;
+        var lastFetchTime = 0;
 
         _scrollState = { hasMore: hasMore, pageSize: pageSize, maxItems: maxItems,
-                         totalLoaded: totalLoaded, offset: offset, loading: loading };
+                         totalLoaded: totalLoaded, offset: offset, loading: loading, lastFetchTime: 0 };
+
+        function _countPending() {
+            var imgs = document.querySelectorAll('.gallery img');
+            var n = 0;
+            for (var i = Math.max(0, imgs.length - pageSize); i < imgs.length; i++) {
+                if (imgs[i] && !imgs[i].complete) n++;
+            }
+            return n;
+        }
 
         _scrollTimer = function() {
             var s = _scrollState;
             if (!s || !s.hasMore || s.loading) return;
             if (s.maxItems && s.totalLoaded >= s.maxItems) { s.hasMore = false; return; }
+            if (_countPending() > 20) return;  // 等最近一批图加载完
+
+            var now = Date.now();
+            if (now - s.lastFetchTime < 800) return;  // 两次请求间隔 ≥ 0.8s
+            s.lastFetchTime = now;
 
             var scrollBottom = window.innerHeight + window.scrollY;
             var docHeight = document.documentElement.offsetHeight;
-            if (docHeight - scrollBottom > 600) return;
+            if (docHeight - scrollBottom > 800) return;  // 距底部 800px 预加载
 
             s.loading = true;
             s.offset += s.pageSize;
