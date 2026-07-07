@@ -723,6 +723,7 @@ async def open_illust_folder(illust_id: int):
     session.close()
     if not artist:
         return JSONResponse({"ok": False, "error": "画师不存在"}, status_code=404)
+    from .. import config as _cfg
     from ..tracker import _artist_dir_name
     folder = _cfg.IMAGES_DIR / _artist_dir_name(artist)
     os.makedirs(str(folder), exist_ok=True)
