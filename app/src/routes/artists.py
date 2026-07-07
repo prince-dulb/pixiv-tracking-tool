@@ -150,21 +150,29 @@ def _do_refresh_artist(tracker, artist_id):
 
     # 补拉该画师缺失的 caption
     from ..tracker import _caption_path
+    from .. import config as _cfg
     no_caption = []
+    sample_path = _caption_path(artist, artist.illustrations[0].pixiv_illust_id) if artist.illustrations else None
+    print(f"[refresh] artist={artist.name}, IMAGES_DIR={_cfg.IMAGES_DIR}, sample_path={sample_path}")
     for ill in artist.illustrations:
         if not _caption_path(artist, ill.pixiv_illust_id).exists():
             no_caption.append(ill)
+    print(f"[refresh] {artist.name}: {len(no_caption)}/{len(artist.illustrations)} captions missing")
     if no_caption:
         progress.begin_phase(task_id, "syncing")
         progress.set_files_total(task_id, len(no_caption))
-        progress.set_detail(task_id, "正在补拉作品简介...")
+        progress.set_detail(task_id, f"正在补拉作品简介 ({len(no_caption)} 件)...")
+        ok, fail = 0, 0
         for i, ill in enumerate(no_caption):
             progress.add_files_done(task_id, 1)
             progress.set_artist(task_id, artist.name)
             try:
                 tracker._fetch_and_save_caption(ill)
+                ok += 1
             except Exception as e:
+                fail += 1
                 progress.add_error(task_id, f"caption {ill.pixiv_illust_id}: {e}")
+        print(f"[refresh] {artist.name}: caption fetch done — {ok} ok, {fail} failed")
     session.commit()
 
     pending = (
