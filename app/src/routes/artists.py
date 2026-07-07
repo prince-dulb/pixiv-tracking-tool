@@ -148,6 +148,22 @@ def _do_refresh_artist(tracker, artist_id):
     tracker._convert_ugoira_zips(session, artist)
     session.commit()
 
+    # 补拉该画师缺失的 caption
+    from ..tracker import _caption_path
+    no_caption = []
+    for ill in artist.illustrations:
+        if not _caption_path(artist, ill.pixiv_illust_id).exists():
+            no_caption.append(ill)
+    if no_caption:
+        progress.begin_phase(task_id, "syncing")
+        progress.set_files_total(task_id, len(no_caption))
+        progress.set_detail(task_id, "正在补拉作品简介...")
+        for i, ill in enumerate(no_caption):
+            progress.add_files_done(task_id, 1)
+            progress.set_artist(task_id, artist.name)
+            tracker._fetch_and_save_caption(ill)
+    session.commit()
+
     pending = (
         session.query(Illustration)
         .filter_by(artist_id=artist.id)

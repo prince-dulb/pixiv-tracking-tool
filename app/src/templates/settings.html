@@ -111,18 +111,29 @@ document.getElementById('change-path-form').addEventListener('submit', e => {
 <div class="settings-section">
     <h3>画廊翻页</h3>
     <form method="post" action="/settings/pagination" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-        <select name="pagination_mode" style="padding:6px 10px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px;">
+        <select name="pagination_mode" id="pagination-mode-select" style="padding:6px 10px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px;">
             <option value="scroll" {% if pagination_mode == 'scroll' %}selected{% endif %}>无限滚动</option>
             <option value="paginate" {% if pagination_mode == 'paginate' %}selected{% endif %}>页码翻页</option>
         </select>
+        <span id="page-size-group">
         <select name="page_size" style="padding:6px 10px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px;">
             <option value="50" {% if page_size == 50 %}selected{% endif %}>50 件/页</option>
             <option value="100" {% if page_size == 100 %}selected{% endif %}>100 件/页</option>
             <option value="200" {% if page_size == 200 %}selected{% endif %}>200 件/页</option>
             <option value="500" {% if page_size == 500 %}selected{% endif %}>500 件/页</option>
         </select>
+        </span>
         <button type="submit">保存</button>
     </form>
+    <script>
+    (function() {
+        var modeSel = document.getElementById('pagination-mode-select');
+        var sizeGroup = document.getElementById('page-size-group');
+        function update() { sizeGroup.style.display = modeSel.value === 'scroll' ? 'none' : ''; }
+        modeSel.addEventListener('change', update);
+        update();
+    })();
+    </script>
 </div>
 
 <div class="settings-section">

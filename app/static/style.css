@@ -604,6 +604,7 @@ button:hover { opacity: 0.9; }
     padding: 0 6px;
     pointer-events: none;
 }
+#scroll-sentinel { height: 1px; width: 100%; }
 .card-page-count.manga {
     border: 1.5px solid var(--accent);
     background: rgba(0,0,0,0.55);
