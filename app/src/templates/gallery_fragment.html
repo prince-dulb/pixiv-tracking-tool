@@ -17,6 +17,11 @@
                 title="{{ '取消收藏' if illust.is_bookmarked else '收藏' }}">
             {{ '♥' if illust.is_bookmarked else '♡' }}
         </button>
+        {% if illust.x_restrict == 1 %}
+        <span class="card-r18">R-18</span>
+        {% elif illust.x_restrict == 2 %}
+        <span class="card-r18 r18g">R-18G</span>
+        {% endif %}
         {% if illust.page_count > 1 %}
         <span class="card-page-count{% if illust.type == 'manga' %} manga{% endif %}">{{ illust.page_count }}P</span>
         {% endif %}

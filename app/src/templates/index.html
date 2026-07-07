@@ -609,22 +609,27 @@
     {% for illust in illustrations %}
     <div class="illust-card {% if illust.is_hidden %}card-hidden{% endif %}">
         <div class="thumb-container">
-            {% if illust.file_paths %}
             <a href="/illust/{{ illust.id }}{% if selected_artist_ids is not none or selected_types is not none or show_hidden %}?{% if selected_artist_ids is not none %}artist_ids={{ selected_artist_ids|join(',') }}{% endif %}{% if selected_artist_ids is not none and selected_types is not none %}&{% endif %}{% if selected_types is not none %}types={{ selected_types|join(',') }}{% endif %}{% if (selected_artist_ids is not none or selected_types is not none) and show_hidden %}&{% endif %}{% if show_hidden %}show_hidden=1{% endif %}{% endif %}">
+            {% if illust.file_paths %}
                 <img src="{{ illust.file_paths.split(',')[0] }}"
                      alt="{{ illust.title }}"
                      loading="lazy"
                      class="illust-thumb"
                      onerror="this.src='/static/placeholder.svg'">
-            </a>
             {% else %}
-            <div class="illust-thumb placeholder"></div>
+                <div class="illust-thumb placeholder" style="display:flex;align-items:center;justify-content:center;color:var(--text-dim);font-size:12px;">未下载</div>
             {% endif %}
+            </a>
             <button class="card-bookmark-btn{% if illust.is_bookmarked %} bookmarked{% endif %}"
                     data-illust-id="{{ illust.id }}"
                     title="{{ '取消收藏' if illust.is_bookmarked else '收藏' }}">
                 {{ '♥' if illust.is_bookmarked else '♡' }}
             </button>
+            {% if illust.x_restrict == 1 %}
+            <span class="card-r18">R-18</span>
+            {% elif illust.x_restrict == 2 %}
+            <span class="card-r18 r18g">R-18G</span>
+            {% endif %}
             {% if illust.page_count > 1 %}
             <span class="card-page-count{% if illust.type == 'manga' %} manga{% endif %}">{{ illust.page_count }}P</span>
             {% endif %}

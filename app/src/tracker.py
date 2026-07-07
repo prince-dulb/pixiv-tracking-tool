@@ -649,6 +649,7 @@ class Tracker:
             view_count=illust_data["view_count"],
             posted_at=posted_at,
             is_bookmarked=illust_data.get("is_bookmarked", False),
+            x_restrict=illust_data.get("x_restrict", 0),
         )
         session.add(illust)
         session.commit()

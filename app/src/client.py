@@ -243,5 +243,6 @@ class PixivClient:
             "posted_at": illust.get("create_date"),
             "is_bookmarked": illust.get("is_bookmarked", False),
             "caption": illust.get("caption", ""),
+            "x_restrict": illust.get("x_restrict", 0),
             "urls": urls,
         }
