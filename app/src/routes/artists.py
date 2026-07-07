@@ -161,7 +161,10 @@ def _do_refresh_artist(tracker, artist_id):
         for i, ill in enumerate(no_caption):
             progress.add_files_done(task_id, 1)
             progress.set_artist(task_id, artist.name)
-            tracker._fetch_and_save_caption(ill)
+            try:
+                tracker._fetch_and_save_caption(ill)
+            except Exception as e:
+                progress.add_error(task_id, f"caption {ill.pixiv_illust_id}: {e}")
     session.commit()
 
     pending = (

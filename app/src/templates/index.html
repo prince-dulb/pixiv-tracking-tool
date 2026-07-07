@@ -332,21 +332,15 @@
         });
     }
 
-    var _scrollObserver = null;
-    var _scrollSentinel = null;
+    var _scrollTimer = null;
+    var _scrollState = null;
 
     function resetInfiniteScroll() {
-        // Remove old observer and sentinel
-        if (_scrollObserver) _scrollObserver.disconnect();
-        if (_scrollSentinel && _scrollSentinel.parentNode) _scrollSentinel.remove();
-        _scrollObserver = null;
-        _scrollSentinel = null;
+        if (_scrollTimer) { window.removeEventListener('scroll', _scrollTimer); _scrollTimer = null; }
+        _scrollState = null;
 
         var mode = '{{ pagination_mode }}';
         if (mode !== 'scroll') return;
-
-        var g = document.querySelector('.gallery');
-        if (!g) return;
 
         var hasMore = {{ 'true' if has_more else 'false' }};
         var pageSize = {{ page_size }};
@@ -354,53 +348,44 @@
         var totalLoaded = pageSize;
         var offset = 0;
         var loading = false;
-        var lastFetchTime = 0;
 
-        _scrollSentinel = document.createElement('div');
-        _scrollSentinel.id = 'scroll-sentinel';
-        g.appendChild(_scrollSentinel);
+        _scrollState = { hasMore: hasMore, pageSize: pageSize, maxItems: maxItems,
+                         totalLoaded: totalLoaded, offset: offset, loading: loading };
 
-        function countPendingImages() {
-            var imgs = g.querySelectorAll('img');
-            var pending = 0;
-            for (var i = Math.max(0, imgs.length - pageSize * 2); i < imgs.length; i++) {
-                if (imgs[i] && !imgs[i].complete) pending++;
-            }
-            return pending;
-        }
+        _scrollTimer = function() {
+            var s = _scrollState;
+            if (!s || !s.hasMore || s.loading) return;
+            if (s.maxItems && s.totalLoaded >= s.maxItems) { s.hasMore = false; return; }
 
-        _scrollObserver = new IntersectionObserver(function(entries) {
-            if (!entries[0].isIntersecting || !hasMore || loading) return;
-            if (maxItems && totalLoaded >= maxItems) { hasMore = false; _scrollSentinel.remove(); return; }
-            if (countPendingImages() > 10) return;
-            var now = Date.now();
-            if (now - lastFetchTime < 1000) return;
-            lastFetchTime = now;
-            loading = true;
-            offset += pageSize;
+            var scrollBottom = window.innerHeight + window.scrollY;
+            var docHeight = document.documentElement.offsetHeight;
+            if (docHeight - scrollBottom > 600) return;
+
+            s.loading = true;
+            s.offset += s.pageSize;
             document.getElementById('load-spinner').style.display = 'block';
 
             var params = new URLSearchParams(window.location.search);
-            params.set('offset', offset);
+            params.set('offset', s.offset);
             params.set('fragment', '1');
 
             fetch('/?' + params.toString())
-                .then(function(r) { hasMore = r.headers.get('X-Has-More') === '1'; return r.text(); })
+                .then(function(r) { s.hasMore = r.headers.get('X-Has-More') === '1'; return r.text(); })
                 .then(function(html) {
                     document.getElementById('load-spinner').style.display = 'none';
-                    _scrollSentinel.insertAdjacentHTML('beforebegin', html);
-                    totalLoaded += pageSize;
-                    loading = false;
-                    if (!hasMore || (maxItems && totalLoaded >= maxItems)) _scrollSentinel.remove();
+                    var g = document.querySelector('.gallery');
+                    if (g) g.insertAdjacentHTML('beforeend', html);
+                    s.totalLoaded += s.pageSize;
+                    s.loading = false;
                     rebindBookmarks();
                 })
                 .catch(function() {
                     document.getElementById('load-spinner').style.display = 'none';
-                    loading = false;
-                    offset -= pageSize;
+                    s.loading = false;
+                    s.offset -= s.pageSize;
                 });
-        }, {rootMargin: '600px'});
-        _scrollObserver.observe(_scrollSentinel);
+        };
+        window.addEventListener('scroll', _scrollTimer, {passive: true});
     }
 
     // AJAX 筛选 — 点击任意 tag
