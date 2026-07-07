@@ -601,10 +601,7 @@ class Tracker:
         count = 0
         for illust_data in self.client.get_all_artist_illusts(artist.pixiv_user_id):
             illust = self._save_illust(session, artist, illust_data)
-            try:
-                self._fetch_and_save_caption(illust)
-            except Exception:
-                pass  # 单个 caption 失败不中断全量拉取
+            self._fetch_and_save_caption(illust)
             count += 1
         return count
 
@@ -623,10 +620,7 @@ class Tracker:
         for illust_data in self.client.get_all_artist_illusts(artist.pixiv_user_id):
             if illust_data["illust_id"] not in existing_ids:
                 illust = self._save_illust(session, artist, illust_data)
-                try:
-                    self._fetch_and_save_caption(illust)
-                except Exception:
-                    pass  # 单个 caption 失败不中断
+                self._fetch_and_save_caption(illust)
                 count += 1
             else:
                 # 已有作品：同步收藏状态（caption 补拉走设置页「校验补全」按钮，不在 refresh 时逐件调 detail API）
@@ -683,10 +677,11 @@ class Tracker:
                 caption_path.write_text(_sanitize_caption(caption), encoding='utf-8')
         except RuntimeError as e:
             msg = str(e)
-            # 作品已删除/私有 — 静默跳过
             if "尚无此页" in msg or "not found" in msg.lower():
-                return
-            raise  # 其他 RuntimeError（OAuth 过期等）向上抛给调用方处理
+                return  # 作品已删除/私有，静默跳过
+            print(f"  [caption] ✗ {illust.pixiv_illust_id}: {e}")
+        except Exception as e:
+            print(f"  [caption] ✗ {illust.pixiv_illust_id}: {e}")
 
     def _download_artist(self, user_id, artist_dir=None, task_id=None, clear_archive=False):
         """用 gallery-dl 下载画师的全部作品（auto-dedup）。
