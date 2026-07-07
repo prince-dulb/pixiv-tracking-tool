@@ -78,6 +78,7 @@
 
 <div class="detail-actions">
     <a href="https://www.pixiv.net/artworks/{{ illust.pixiv_illust_id }}" target="_blank" class="ext-link">在 Pixiv 查看 &#8599;</a>
+    <button class="btn-sm" onclick="fetch('/illust/{{ illust.id }}/open-folder',{method:'POST'});" title="打开本地文件夹">&#128193;</button>
     <div style="margin-left:auto;display:flex;gap:8px;">
         <form method="post" action="/illust/{{ illust.id }}/hide" style="display:inline;">
             <input type="hidden" name="redirect_url" value="/illust/{{ illust.id }}{{ nav_query }}{% if show_hidden %}{% if nav_query %}&{% endif %}show_hidden=1{% endif %}">

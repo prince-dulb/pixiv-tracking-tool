@@ -469,15 +469,19 @@ async def illust_detail(request: Request, illust_id: int,
 
     # 从文件读取 caption（与图片同级，随 DATA_ROOT 迁移）
     caption_html = ""
-    from ..tracker import _caption_path, _sanitize_caption
+    from ..tracker import _caption_path, _sanitize_caption, _artist_dir_name
     caption_file = _caption_path(artist, illust.pixiv_illust_id)
     if caption_file.exists():
         caption_html = _sanitize_caption(caption_file.read_text(encoding='utf-8'))
+
+    # 本地画师目录路径（供「在资源管理器中打开」使用）
+    local_dir = str(_cfg.IMAGES_DIR / _artist_dir_name(artist))
 
     return templates.TemplateResponse(
         request, "illust_detail.html",
         {"illust": illust, "artist": artist, "paths": paths,
          "caption_html": caption_html,
+         "local_dir": local_dir,
          "page_count": page_count, "tags": tags,
          "prev_id": prev_id, "next_id": next_id, "nav_query": nav_query,
          "current_idx": current_idx + 1, "total_count": len(all_ids),
@@ -703,6 +707,27 @@ async def delete_illust(illust_id: int, redirect_url: str = Form("/")):
     if not redirect_url.startswith("/"):
         redirect_url = "/"
     return RedirectResponse(redirect_url, status_code=303)
+
+
+@router.post("/illust/{illust_id}/open-folder")
+async def open_illust_folder(illust_id: int):
+    """在 Windows 资源管理器中打开作品所在的本地目录。"""
+    import subprocess
+    import os
+    session = Session()
+    illust = session.query(Illustration).get(illust_id)
+    if not illust:
+        session.close()
+        return JSONResponse({"ok": False, "error": "作品不存在"}, status_code=404)
+    artist = session.query(TrackedArtist).get(illust.artist_id)
+    session.close()
+    if not artist:
+        return JSONResponse({"ok": False, "error": "画师不存在"}, status_code=404)
+    from ..tracker import _artist_dir_name
+    folder = _cfg.IMAGES_DIR / _artist_dir_name(artist)
+    os.makedirs(str(folder), exist_ok=True)
+    subprocess.Popen(['explorer', str(folder)])
+    return JSONResponse({"ok": True})
 
 
 @router.post("/illust/{illust_id}/bookmark")
