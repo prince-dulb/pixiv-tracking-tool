@@ -1,5 +1,3 @@
-# Bug 回报
-
 > 审查日期：2026-07-07 | 审查范围：v0.1.0 全部改动 | 审查方式：对抗式审查
 
 | #   | 日期         | 严重等级  | 状态    | 描述                                                                                                              | 解决方案                                                                  |
@@ -14,3 +12,4 @@
 | 8   | 2026-07-07 | 🟢 低  | ✅ 已修复 | caption 文件路径 `_artist_dir_name + .caption.html` 拼接逻辑在 `works.py:472` 和 `tracker.py:587` 重复                      | 提取为 `_caption_path(artist, illust_id)`，三处调用点统一使用 |
 | 9   | 2026-07-07 | 🟡 中等 | ✅ 已修复 | `validate_and_fix_all` 补拉 caption 时，已删除/私有作品的 API 错误（"尚无此页"）被当作异常展示在进度条下方，应静默跳过                                                              | `RuntimeError` 检测 `"尚无此页"` / `"not found"` → 静默跳过，不报 error |
 | 10  | 2026-07-07 | 🟡 中等 | ✅ 已修复 | 进度条永远显示 0%——前端 JS 只处理 `downloading` 和 `checking` 阶段，`syncing` 阶段被漏掉，落到 else 分支用 artists 数据算百分比（全 0）                                              | 加 `syncing` 分支，和 downloading 一样用 files_done/files_total                       |
+| 11  | 2026-07-07 | 🟡 中等 | 🔒 搁置   | Pixiv 公开 API 对部分作品返回空 `caption`，即使网页上明明有（如 pixiv_id=94858205）。非我方代码问题，API 本身不提供。                                                                  | 唯一解决方案：抓取网页 HTML 替代 API 获取 caption。暂不处理。                                          |
