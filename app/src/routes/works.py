@@ -1,6 +1,6 @@
 import threading
 from fastapi import APIRouter, Request, Query, Form
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, JSONResponse
 
 from ..models import Session, TrackedArtist, Illustration, IllustrationTag
 from ..web import templates, get_tracker
